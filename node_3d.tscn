@@ -43,3 +43,4 @@ transform = Transform3D(1, 1.49012e-08, 1.49012e-08, 1.49012e-08, 1, 2.98023e-08
 
 [node name="VoxelTerrain" type="Node3D" parent="." groups=["voxel_terrain"]]
 script = ExtResource("1_a202f")
+chunk_size = 60

@@ -74,7 +74,7 @@ func _on_editor_param_changed():
 	# Debounce rapid editor updates (e.g. dragging sliders)
 	if _update_timer:
 		_update_timer.timeout.disconnect(_do_editor_update)
-	_update_timer = get_tree().create_timer(0.4, false)
+	_update_timer = get_tree().create_timer(0.0, false) #Disabled 0.0 means No debaunce, disabled.
 	_update_timer.timeout.connect(_do_editor_update)
 
 
