@@ -70,6 +70,11 @@ func _ready():
 func _on_editor_param_changed():
 	if not Engine.is_editor_hint():
 		return
+		
+	if not is_inside_tree():
+			# This is likely during initial editor loading/setup, ignore the update.
+			# A subsequent call will happen when it's fully ready.
+			return
 	
 	# Debounce rapid editor updates (e.g. dragging sliders)
 	if _update_timer:
