@@ -56,7 +56,7 @@ mesh = SubResource("CapsuleMesh_noarx")
 [node name="VoxelTerrain" type="Node3D" parent="Node3D/Node3D" groups=["voxel_terrain"]]
 transform = Transform3D(1, 1.49012e-08, 1.49012e-08, 1.49012e-08, 1, 2.98023e-08, 1.49012e-08, 2.2204577e-16, 1, -3.1133078e-07, -20.893, -4.639202e-15)
 script = ExtResource("1_a202f")
-chunk_size = 32
+chunk_size = 220
 
 [node name="CSGBox3D" type="CSGBox3D" parent="."]
 transform = Transform3D(34.875, 0, 0, 0, 34.875, 0, 0, 0, 34.875, 119.99788, 212.77443, 92.88375)
