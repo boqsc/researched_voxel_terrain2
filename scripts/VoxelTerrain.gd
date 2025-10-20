@@ -46,6 +46,7 @@ func _ready():
 		rd = RenderingServer.create_local_rendering_device()
 		if not rd:
 			push_error("Failed to create RenderingDevice - compute shaders not supported")
+			push_error("Failed to create RenderingDevice - compute shaders not supported")
 			return
 		print("RenderingDevice created successfully")
 
