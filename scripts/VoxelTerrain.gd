@@ -1,40 +1,90 @@
 @tool
 extends Node3D
 
-@export var chunk_size: int = 100
-@export var voxel_size: float = 1.0
-@export var noise_scale: float = 0.1  # Increased for better terrain features
-@export var height_scale: float = 8.0  # Adjusted for chunk size
+@export var chunk_size: int = 100:
+	set(value):
+		if chunk_size == value:
+			return
+		chunk_size = value
+		_on_editor_param_changed()
+
+@export var voxel_size: float = 1.0:
+	set(value):
+		if voxel_size == value:
+			return
+		voxel_size = value
+		_on_editor_param_changed()
+
+@export var noise_scale: float = 0.1:
+	set(value):
+		if noise_scale == value:
+			return
+		noise_scale = value
+		_on_editor_param_changed()
+
+@export var height_scale: float = 8.0:
+	set(value):
+		if height_scale == value:
+			return
+		height_scale = value
+		_on_editor_param_changed()
 
 var rd: RenderingDevice
 var generator_shader: RID
 var mesher_shader: RID
 var mesh_instance: MeshInstance3D
+var _update_timer: SceneTreeTimer
 
 func _ready():
-	# Create rendering device
-	rd = RenderingServer.create_local_rendering_device()
+	if Engine.is_editor_hint():
+		print("🧰 Running in editor mode (tool script)")
+	else:
+		print("▶️ Running in game mode")
+
+	# Create rendering device (only once)
 	if not rd:
-		push_error("Failed to create RenderingDevice - compute shaders not supported")
 		push_error("Make sure you're using Forward+ or Mobile renderer, not Compatibility")
-		return
-	
-	print("RenderingDevice created successfully")
-	
-	# Load and compile shaders
-	if not load_shaders():
-		push_error("Failed to load compute shaders")
-		return
-	
-	print("Shaders loaded successfully")
-	
-	# Create mesh instance for rendering
-	mesh_instance = MeshInstance3D.new()
-	add_child(mesh_instance)
-	
+		rd = RenderingServer.create_local_rendering_device()
+		if not rd:
+			push_error("Failed to create RenderingDevice - compute shaders not supported")
+			return
+		print("RenderingDevice created successfully")
+
+	# Load shaders if not already loaded
+	if not generator_shader.is_valid() or not mesher_shader.is_valid():
+		if not load_shaders():
+			push_error("Failed to load compute shaders")
+			return
+		print("Shaders loaded successfully")
+
+	# Create mesh instance if missing
+	if not mesh_instance:
+		mesh_instance = MeshInstance3D.new()
+		add_child(mesh_instance)
+
 	# Generate initial terrain
-	print("Generating terrain with chunk_size: ", chunk_size)
+	print("🌍 Generating initial terrain with chunk_size:", chunk_size)
 	generate_terrain()
+
+
+func _on_editor_param_changed():
+	if not Engine.is_editor_hint():
+		return
+	
+	# Debounce rapid editor updates (e.g. dragging sliders)
+	if _update_timer:
+		_update_timer.timeout.disconnect(_do_editor_update)
+	_update_timer = get_tree().create_timer(0.4, false)
+	_update_timer.timeout.connect(_do_editor_update)
+
+
+func _do_editor_update():
+	if not Engine.is_editor_hint():
+		return
+	if rd and is_inside_tree():
+		print("🔄 Editor parameter changed — regenerating terrain...")
+		generate_terrain()
+
 
 func load_shaders() -> bool:
 	# Load voxel generator shader
