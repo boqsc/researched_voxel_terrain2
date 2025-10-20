@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://c7ubxrlyf7kkh"]
+[gd_scene load_steps=11 format=3 uid="uid://c7ubxrlyf7kkh"]
 
 [ext_resource type="Script" uid="uid://bldjphphkquaq" path="res://scripts/VoxelTerrain.gd" id="1_a202f"]
 [ext_resource type="Script" uid="uid://dhxco8hh78kms" path="res://character_body_3d.gd" id="1_noarx"]
@@ -22,6 +22,10 @@ glow_enabled = true
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_noarx"]
 
+[sub_resource type="BoxMesh" id="BoxMesh_noarx"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_a0tk4"]
+
 [node name="Node3D" type="Node3D"]
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
@@ -34,7 +38,7 @@ transform = Transform3D(1, -1.49012e-08, -1.49012e-08, -1.49012e-08, 1, -2.98023
 transform = Transform3D(-0.8660253, -0.4330129, 0.25000006, -2.7805912e-08, 0.49999994, 0.86602545, -0.50000024, 0.74999994, -0.43301255, -72.45088, 63.606453, -110.14688)
 
 [node name="CharacterBody3D" type="CharacterBody3D" parent="Node3D" groups=["collision_entities"]]
-transform = Transform3D(1, 0, 0, -4.4409e-16, 1, 0, 0, 0, 1, 47.651905, 138.768, 93.42319)
+transform = Transform3D(1, 0, 0, -4.4409e-16, 1, 0, 0, 0, 1, 7.455322, 2.2684898, 17.228256)
 collision_layer = 2
 script = ExtResource("1_noarx")
 
@@ -47,10 +51,23 @@ transform = Transform3D(1, 1.49012e-08, 1.49012e-08, 1.49012e-08, 1, 2.98023e-08
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Node3D/CharacterBody3D"]
 mesh = SubResource("CapsuleMesh_noarx")
 
-[node name="VoxelTerrain" type="Node3D" parent="." groups=["voxel_terrain"]]
+[node name="Node3D" type="Node3D" parent="Node3D"]
+
+[node name="VoxelTerrain" type="Node3D" parent="Node3D/Node3D" groups=["voxel_terrain"]]
+transform = Transform3D(1, 1.49012e-08, 1.49012e-08, 1.49012e-08, 1, 2.98023e-08, 1.49012e-08, 2.2204577e-16, 1, -3.1133078e-07, -20.893, -4.639202e-15)
 script = ExtResource("1_a202f")
-voxel_size = 6.0
+chunk_size = 32
 
 [node name="CSGBox3D" type="CSGBox3D" parent="."]
 transform = Transform3D(34.875, 0, 0, 0, 34.875, 0, 0, 0, 34.875, 119.99788, 212.77443, 92.88375)
 material = SubResource("StandardMaterial3D_noarx")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+transform = Transform3D(260, 0, 0, 0, 14.015, 0, 0, 0, 260.458, 56.563744, 10.671171, 129.2955)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D"]
+visible = false
+mesh = SubResource("BoxMesh_noarx")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+shape = SubResource("BoxShape3D_a0tk4")

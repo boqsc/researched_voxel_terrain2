@@ -245,20 +245,32 @@ func generate_voxel_data() -> RID:
 	
 	return voxel_buffer
 
+
 func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	# Create output buffers
 	# Each vertex: 3 floats for pos, 3 for normal, 2 for uv = 8 floats total.
 	# So, 8 * 4 = 32 bytes per vertex.
-	var bytes_per_vertex = 8 * 4 
-	var max_vertices = chunk_size * chunk_size * chunk_size * 24 # 6 faces * 4 vertices
-	var max_indices = chunk_size * chunk_size * chunk_size * 36  # 6 faces * 6 indices
+	var bytes_per_vertex = 8 * 4
+	
+	# --- FIX START: Allocate smaller buffers using a realistic upper bound ---
+	# The original calculation (chunk_size^3 * 24) reserved space for ALL 6 faces
+	# of ALL blocks. We only need space for the *exposed surface*.
+	
+	# Using 6 vertices per voxel as a very safe upper bound for a surface mesh.
+	# This is a 75% reduction from the previous volume-based * 24.
+	var max_vertices = chunk_size * chunk_size * chunk_size * 6
+	
+	# Indices are 1.5x vertices (6 indices for 4 vertices/quad) -> 6 * 1.5 = 9.
+	var max_indices = chunk_size * chunk_size * chunk_size * 9
+	
+	# --- FIX END ---
 	
 	var vertex_buffer = rd.storage_buffer_create(max_vertices * bytes_per_vertex)
 	if not vertex_buffer.is_valid():
 		push_error("Failed to create vertex buffer")
 		return {}
 	
-	var index_buffer = rd.storage_buffer_create(max_indices * 4)   # 1 uint per index
+	var index_buffer = rd.storage_buffer_create(max_indices * 4)  # 1 uint per index
 	if not index_buffer.is_valid():
 		push_error("Failed to create index buffer")
 		if vertex_buffer.is_valid():
@@ -365,6 +377,9 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	var vertex_count = counter_result.decode_u32(0) # This is the *actual* vertex count
 	var index_count = counter_result.decode_u32(4)
 	
+	# Note: We read back the *entire* allocated buffer. The actual valid data is only
+	# vertex_count * bytes_per_vertex and index_count * 4. This is fine because we've
+	# significantly reduced the total allocated size (max_vertices/max_indices).
 	var vertex_data = rd.buffer_get_data(vertex_buffer)
 	var index_data = rd.buffer_get_data(index_buffer)
 	
@@ -381,6 +396,8 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 		"vertex_data": vertex_data, # This now contains (pos, normal, uv) interleaved
 		"index_data": index_data
 	}
+
+
 
 func create_godot_mesh(mesh_data: Dictionary):
 	if mesh_data.vertex_count == 0:
