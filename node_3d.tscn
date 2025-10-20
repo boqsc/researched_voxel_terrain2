@@ -47,9 +47,64 @@ transform = Transform3D(1, 1.49012e-08, 1.49012e-08, 1.49012e-08, 1, 2.98023e-08
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Node3D/CharacterBody3D"]
 mesh = SubResource("CapsuleMesh_noarx")
 
-[node name="VoxelTerrain" type="Node3D" parent="." groups=["voxel_terrain"]]
+[node name="Node3D2" type="Node3D" parent="."]
+transform = Transform3D(34.875, 0, 0, 0, 34.875, 0, 0, 0, 34.875, 119.99788, 212.77443, 92.88375)
+
+[node name="VoxelTerrain" type="Node3D" parent="Node3D2" groups=["voxel_terrain"]]
+transform = Transform3D(0.028673833, 0, 0, 0, 0.028673833, 0, 0, 0, 0.028673833, -3.4407992, -6.1010585, -2.6633332)
 script = ExtResource("1_a202f")
-chunk_size = 220
+chunk_size = 210
+
+[node name="VoxelTerrain2" type="Node3D" parent="Node3D2" groups=["voxel_terrain"]]
+transform = Transform3D(0.028673831, 0, 0, 0, 0.028673831, 0, 0, 0, 0.028673831, -3.440799, -6.101058, 3.4889796)
+script = ExtResource("1_a202f")
+chunk_size = 210
+
+[node name="VoxelTerrain3" type="Node3D" parent="Node3D2" groups=["voxel_terrain"]]
+transform = Transform3D(0.028673831, 0, 0, 0, 0.028673831, 0, 0, 0, 0.028673831, 3.1027055, -6.101058, -2.663333)
+script = ExtResource("1_a202f")
+chunk_size = 210
+
+[node name="VoxelTerrain4" type="Node3D" parent="Node3D2" groups=["voxel_terrain"]]
+transform = Transform3D(0.028673822, 0, 0, 0, 0.028673822, 0, 0, 0, 0.028673822, 3.0676727, -6.1010556, 3.6702316)
+script = ExtResource("1_a202f")
+chunk_size = 210
+
+[node name="Node3D" type="Node3D" parent="Node3D2"]
+transform = Transform3D(0.99999994, 0, 0, 0, 0.99999994, 0, 0, 0, 0.99999994, 0, 0, 0)
+
+[node name="VoxelTerrain5" type="Node3D" parent="Node3D2/Node3D" groups=["voxel_terrain"]]
+transform = Transform3D(0.028673835, 0, 0, 0, 0.028673835, 0, 0, 0, 0.028673835, -3.4407995, -6.101059, -9.119461)
+script = ExtResource("1_a202f")
+chunk_size = 210
+
+[node name="VoxelTerrain7" type="Node3D" parent="Node3D2/Node3D" groups=["voxel_terrain"]]
+transform = Transform3D(0.028673835, 0, 0, 0, 0.028673835, 0, 0, 0, 0.028673835, -9.724625, -6.1010594, -9.119461)
+script = ExtResource("1_a202f")
+chunk_size = 210
+
+[node name="VoxelTerrain6" type="Node3D" parent="Node3D2/Node3D" groups=["voxel_terrain"]]
+transform = Transform3D(0.028673833, 0, 0, 0, 0.028673833, 0, 0, 0, 0.028673833, 2.826814, -6.1010585, -9.11946)
+script = ExtResource("1_a202f")
+chunk_size = 210
+
+[node name="Node3D2" type="Node3D" parent="Node3D2"]
+transform = Transform3D(0.9999998, 0, 0, 0, 0.9999998, 0, 0, 0, 0.9999998, 0, 0, -6.511998)
+
+[node name="VoxelTerrain5" type="Node3D" parent="Node3D2/Node3D2" groups=["voxel_terrain"]]
+transform = Transform3D(0.028673835, 0, 0, 0, 0.028673835, 0, 0, 0, 0.028673835, -3.4407995, -6.101059, -9.119461)
+script = ExtResource("1_a202f")
+chunk_size = 210
+
+[node name="VoxelTerrain7" type="Node3D" parent="Node3D2/Node3D2" groups=["voxel_terrain"]]
+transform = Transform3D(0.028673835, 0, 0, 0, 0.028673835, 0, 0, 0, 0.028673835, -9.724625, -6.1010594, -9.119461)
+script = ExtResource("1_a202f")
+chunk_size = 210
+
+[node name="VoxelTerrain6" type="Node3D" parent="Node3D2/Node3D2" groups=["voxel_terrain"]]
+transform = Transform3D(0.028673833, 0, 0, 0, 0.028673833, 0, 0, 0, 0.028673833, 2.826814, -6.1010585, -9.11946)
+script = ExtResource("1_a202f")
+chunk_size = 210
 
 [node name="CSGBox3D" type="CSGBox3D" parent="."]
 transform = Transform3D(34.875, 0, 0, 0, 34.875, 0, 0, 0, 34.875, 119.99788, 212.77443, 92.88375)

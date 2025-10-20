@@ -246,56 +246,61 @@ func generate_voxel_data() -> RID:
 	return voxel_buffer
 
 func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
-	# Create output buffers
-	# Each vertex: 3 floats for pos, 3 for normal, 2 for uv = 8 floats total.
-	# So, 8 * 4 = 32 bytes per vertex.
-	var bytes_per_vertex = 8 * 4 
-	var max_vertices = chunk_size * chunk_size * chunk_size * 24 # 6 faces * 4 vertices
-	var max_indices = chunk_size * chunk_size * chunk_size * 36  # 6 faces * 6 indices
+	# === VRAM Optimization ===
+	# Previously allocated buffers for 100% visible voxels (worst case).
+	# Now we assume only ~5–20% are actually visible to save huge VRAM usage.
+	var visibility_ratio := 0.01  # Adjust between 0.05–0.2 if you see cutoffs
+	var voxel_count = chunk_size * chunk_size * chunk_size
+	var max_visible_voxels = int(voxel_count * visibility_ratio)
 	
+	# Each visible voxel can output up to 24 vertices and 36 indices
+	var bytes_per_vertex = 8 * 4 # (3 pos + 3 normal + 2 uv) * 4 bytes
+	var max_vertices = max_visible_voxels * 24
+	var max_indices  = max_visible_voxels * 36
+
+	print("📦 Allocating buffers for up to ", max_visible_voxels, 
+		" visible voxels (", visibility_ratio * 100.0, "% of total)")
+	print("   → Max vertices: ", max_vertices, ", Max indices: ", max_indices)
+
+	# === Buffer creation ===
 	var vertex_buffer = rd.storage_buffer_create(max_vertices * bytes_per_vertex)
 	if not vertex_buffer.is_valid():
 		push_error("Failed to create vertex buffer")
 		return {}
 	
-	var index_buffer = rd.storage_buffer_create(max_indices * 4)   # 1 uint per index
+	var index_buffer = rd.storage_buffer_create(max_indices * 4) # uint per index
 	if not index_buffer.is_valid():
 		push_error("Failed to create index buffer")
 		if vertex_buffer.is_valid():
 			rd.free_rid(vertex_buffer)
 		return {}
 	
-	# Counter buffer
+	# Counter buffer (GPU increments vertex/index counts)
 	var counter_data = PackedByteArray()
-	counter_data.resize(8) # 2 uints
-	counter_data.encode_u32(0, 0) # vertex_count (actual vertex count, not float count)
-	counter_data.encode_u32(4, 0) # index_count
+	counter_data.resize(8) # 2 uints: vertex_count, index_count
+	counter_data.encode_u32(0, 0)
+	counter_data.encode_u32(4, 0)
 	var counter_buffer = rd.storage_buffer_create(counter_data.size(), counter_data)
 	if not counter_buffer.is_valid():
 		push_error("Failed to create counter buffer")
-		if vertex_buffer.is_valid():
-			rd.free_rid(vertex_buffer)
-		if index_buffer.is_valid():
-			rd.free_rid(index_buffer)
+		if vertex_buffer.is_valid(): rd.free_rid(vertex_buffer)
+		if index_buffer.is_valid(): rd.free_rid(index_buffer)
 		return {}
 	
-	# Parameters buffer
+	# Parameters buffer (chunk size + voxel size)
 	var mesh_params_data = PackedByteArray()
-	mesh_params_data.resize(8) # uint + float
+	mesh_params_data.resize(8)
 	mesh_params_data.encode_u32(0, chunk_size)
 	mesh_params_data.encode_float(4, voxel_size)
 	var mesh_params_buffer = rd.storage_buffer_create(mesh_params_data.size(), mesh_params_data)
 	if not mesh_params_buffer.is_valid():
 		push_error("Failed to create mesh params buffer")
-		if vertex_buffer.is_valid():
-			rd.free_rid(vertex_buffer)
-		if index_buffer.is_valid():
-			rd.free_rid(index_buffer)
-		if counter_buffer.is_valid():
-			rd.free_rid(counter_buffer)
+		if vertex_buffer.is_valid(): rd.free_rid(vertex_buffer)
+		if index_buffer.is_valid(): rd.free_rid(index_buffer)
+		if counter_buffer.is_valid(): rd.free_rid(counter_buffer)
 		return {}
 	
-	# Create uniforms
+	# === Uniform bindings ===
 	var uniforms = []
 	
 	var voxel_uniform = RDUniform.new()
@@ -337,7 +342,7 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 		if mesh_params_buffer.is_valid(): rd.free_rid(mesh_params_buffer)
 		return {}
 	
-	# Create compute pipeline
+	# === Pipeline ===
 	var pipeline = rd.compute_pipeline_create(mesher_shader)
 	if not pipeline.is_valid():
 		push_error("Failed to create meshing pipeline")
@@ -347,28 +352,36 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 		if mesh_params_buffer.is_valid(): rd.free_rid(mesh_params_buffer)
 		return {}
 	
-	# Execute compute shader
+	# === Dispatch ===
 	var compute_list = rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
 	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
 	
-	# Dispatch work groups (fix integer division warning)
-	var groups = ceili(float(chunk_size) / 8.0)  # Use ceiling division for proper rounding
+	var groups = ceili(float(chunk_size) / 8.0)
 	rd.compute_list_dispatch(compute_list, groups, groups, groups)
 	
 	rd.compute_list_end()
 	rd.submit()
 	rd.sync()
 	
-	# Read back results
+	# === Read results ===
 	var counter_result = rd.buffer_get_data(counter_buffer)
-	var vertex_count = counter_result.decode_u32(0) # This is the *actual* vertex count
+	var vertex_count = counter_result.decode_u32(0)
 	var index_count = counter_result.decode_u32(4)
+	
+	print("📈 GPU wrote ", vertex_count, " vertices, ", index_count, " indices")
+	
+	if vertex_count >= max_vertices:
+		print("⚠️ WARNING: Vertex buffer limit reached (", vertex_count, "/", max_vertices, ")")
+		print("   → Try increasing visibility_ratio to avoid truncation")
+	
+	if index_count >= max_indices:
+		print("⚠️ WARNING: Index buffer limit reached (", index_count, "/", max_indices, ")")
 	
 	var vertex_data = rd.buffer_get_data(vertex_buffer)
 	var index_data = rd.buffer_get_data(index_buffer)
 	
-	# Cleanup - free buffers first (this auto-frees uniform_set)
+	# === Cleanup ===
 	if vertex_buffer.is_valid(): rd.free_rid(vertex_buffer)
 	if index_buffer.is_valid(): rd.free_rid(index_buffer)
 	if counter_buffer.is_valid(): rd.free_rid(counter_buffer)
@@ -378,9 +391,10 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	return {
 		"vertex_count": vertex_count,
 		"index_count": index_count,
-		"vertex_data": vertex_data, # This now contains (pos, normal, uv) interleaved
+		"vertex_data": vertex_data,
 		"index_data": index_data
 	}
+
 
 func create_godot_mesh(mesh_data: Dictionary):
 	if mesh_data.vertex_count == 0:
