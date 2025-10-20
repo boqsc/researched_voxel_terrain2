@@ -43,7 +43,6 @@ func _ready():
 
 	# Create rendering device (only once)
 	if not rd:
-		push_error("Make sure you're using Forward+ or Mobile renderer, not Compatibility")
 		rd = RenderingServer.create_local_rendering_device()
 		if not rd:
 			push_error("Failed to create RenderingDevice - compute shaders not supported")
