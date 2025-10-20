@@ -50,12 +50,12 @@ const vec3 face_vertices[24] = vec3[](
 
 // Normals for each of the 6 faces
 const vec3 face_normals[6] = vec3[](
-    vec3(0, 0, 1),  // Front (z+)
-    vec3(0, 0, -1), // Back (z-)
-    vec3(-1, 0, 0), // Left (x-)
-    vec3(1, 0, 0),  // Right (x+)
-    vec3(0, 1, 0),  // Top (y+)
-    vec3(0, -1, 0)  // Bottom (y-)
+    vec3(0, 0, -1), // Front (z-)
+    vec3(0, 0, 1),  // Back (z+)
+    vec3(1, 0, 0),  // Left (x+)
+    vec3(-1, 0, 0), // Right (x-)
+    vec3(0, -1, 0), // Top (y-)
+    vec3(0, 1, 0)   // Bottom (y+)
 );
 
 // UV coordinates for a quad face
