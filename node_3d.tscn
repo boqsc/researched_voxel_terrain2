@@ -107,5 +107,7 @@ script = ExtResource("1_a202f")
 chunk_size = 210
 
 [node name="CSGBox3D" type="CSGBox3D" parent="."]
-transform = Transform3D(34.875, 0, 0, 0, 34.875, 0, 0, 0, 34.875, 119.99788, 212.77443, 92.88375)
+transform = Transform3D(700, 0, 0, 0, 34.875, 0, 0, 0, 1200, 124.658, 94.66432, 92.884)
+visible = false
+use_collision = true
 material = SubResource("StandardMaterial3D_noarx")
