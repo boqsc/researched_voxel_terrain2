@@ -29,6 +29,7 @@ extends Node3D
 		height_scale = value
 		_on_editor_param_changed()
 
+# Use the main RenderingDevice provided by Godot
 var rd: RenderingDevice
 var generator_shader: RID
 var mesher_shader: RID
@@ -41,28 +42,26 @@ func _ready():
 	else:
 		print("▶️ Running in game mode")
 
-	# Create rendering device (only once)
+	# Use main/global rendering device (safe to share between nodes)
+	rd = RenderingServer.get_rendering_device()
 	if not rd:
-		rd = RenderingServer.create_local_rendering_device()
-		if not rd:
-			push_error("Failed to create RenderingDevice - compute shaders not supported")
-			push_error("Failed to create RenderingDevice - compute shaders not supported")
-			return
-		print("RenderingDevice created successfully")
+		push_error("RenderingDevice not available (headless or compatibility renderer). Compute shaders unsupported.")
+		return
+	print("Using global RenderingDevice")
 
-	# Load shaders if not already loaded
-	if not generator_shader.is_valid() or not mesher_shader.is_valid():
+	# Load shaders if not already loaded (guarded so duplicates reuse RIDs)
+	if not generator_shader or not generator_shader.is_valid() or not mesher_shader or not mesher_shader.is_valid():
 		if not load_shaders():
 			push_error("Failed to load compute shaders")
 			return
 		print("Shaders loaded successfully")
 
-	# Create mesh instance if missing
+	# Create a MeshInstance3D child if missing for this node (per-node visual)
 	if not mesh_instance:
 		mesh_instance = MeshInstance3D.new()
 		add_child(mesh_instance)
 
-	# Generate initial terrain
+	# Generate initial terrain (safe: all shared resources exist)
 	print("🌍 Generating initial terrain with chunk_size:", chunk_size)
 	generate_terrain()
 
@@ -72,63 +71,68 @@ func _on_editor_param_changed():
 		return
 		
 	if not is_inside_tree():
-			# This is likely during initial editor loading/setup, ignore the update.
-			# A subsequent call will happen when it's fully ready.
-			return
+		# During scene load there may be spurious calls - ignore until inside tree.
+		return
 	
-	# Debounce rapid editor updates (e.g. dragging sliders)
+	# Debounce rapid editor updates
 	if _update_timer:
-		_update_timer.timeout.disconnect(_do_editor_update)
-	_update_timer = get_tree().create_timer(0.0, false) #Disabled 0.0 means No debaunce, disabled.
+		if _update_timer.is_connected("timeout", Callable(self, "_do_editor_update")):
+			_update_timer.timeout.disconnect(_do_editor_update)
+	_update_timer = get_tree().create_timer(0.05, false)
 	_update_timer.timeout.connect(_do_editor_update)
 
 
 func _do_editor_update():
 	if not Engine.is_editor_hint():
 		return
+	# re-fetch RD in case the renderer changed (very rare)
+	rd = RenderingServer.get_rendering_device()
 	if rd and is_inside_tree():
 		print("🔄 Editor parameter changed — regenerating terrain...")
 		generate_terrain()
 
 
 func load_shaders() -> bool:
-	# Load voxel generator shader
-	var generator_file = load("res://shaders/voxel_generator.glsl")
-	if not generator_file:
-		push_error("Failed to load voxel_generator.glsl - check file path")
+	# Ensure rd exists
+	rd = RenderingServer.get_rendering_device()
+	if not rd:
+		push_error("RenderingDevice not available - cannot load shaders")
 		return false
-	
-	var generator_spirv = generator_file.get_spirv()
-	if not generator_spirv:
-		push_error("Failed to get SPIRV from generator shader - check shader compilation")
-		return false
-	
-	generator_shader = rd.shader_create_from_spirv(generator_spirv)
-	if not generator_shader.is_valid():
-		push_error("Failed to create generator shader on GPU")
-		return false
-	
-	print("Generator shader created successfully")
-	
+
+	# Load voxel generator shader (create only if we don't have a valid RID)
+	if not generator_shader or not generator_shader.is_valid():
+		var generator_file = load("res://shaders/voxel_generator.glsl")
+		if not generator_file:
+			push_error("Failed to load voxel_generator.glsl - check file path")
+			return false
+		var generator_spirv = generator_file.get_spirv()
+		if not generator_spirv:
+			push_error("Failed to get SPIRV from generator shader - check shader compilation")
+			return false
+		generator_shader = rd.shader_create_from_spirv(generator_spirv)
+		if not generator_shader.is_valid():
+			push_error("Failed to create generator shader on GPU")
+			return false
+		print("Generator shader created successfully")
+
 	# Load mesher shader
-	var mesher_file = load("res://shaders/voxel_mesher.glsl")
-	if not mesher_file:
-		push_error("Failed to load voxel_mesher.glsl - check file path")
-		return false
-	
-	var mesher_spirv = mesher_file.get_spirv()
-	if not mesher_spirv:
-		push_error("Failed to get SPIRV from mesher shader - check shader compilation")
-		return false
-	
-	mesher_shader = rd.shader_create_from_spirv(mesher_spirv)
-	if not mesher_shader.is_valid():
-		push_error("Failed to create mesher shader on GPU")
-		return false
-	
-	print("Mesher shader created successfully")
-	
+	if not mesher_shader or not mesher_shader.is_valid():
+		var mesher_file = load("res://shaders/voxel_mesher.glsl")
+		if not mesher_file:
+			push_error("Failed to load voxel_mesher.glsl - check file path")
+			return false
+		var mesher_spirv = mesher_file.get_spirv()
+		if not mesher_spirv:
+			push_error("Failed to get SPIRV from mesher shader - check shader compilation")
+			return false
+		mesher_shader = rd.shader_create_from_spirv(mesher_spirv)
+		if not mesher_shader.is_valid():
+			push_error("Failed to create mesher shader on GPU")
+			return false
+		print("Mesher shader created successfully")
+
 	return true
+
 
 func generate_terrain():
 	print("🏗️ Starting terrain generation...")
@@ -161,6 +165,7 @@ func generate_terrain():
 	# Cleanup
 	if voxel_data_buffer.is_valid():
 		rd.free_rid(voxel_data_buffer)
+
 
 func generate_voxel_data() -> RID:
 	# Create buffers
@@ -228,8 +233,8 @@ func generate_voxel_data() -> RID:
 	rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
 	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
 	
-	# Dispatch work groups (fix integer division warning)
-	var groups = ceili(float(chunk_size) / 8.0)  # Use ceiling division for proper rounding
+	# Dispatch work groups (ceiling division)
+	var groups = ceili(float(chunk_size) / 8.0)
 	rd.compute_list_dispatch(compute_list, groups, groups, groups)
 	
 	rd.compute_list_end()
@@ -245,16 +250,13 @@ func generate_voxel_data() -> RID:
 	
 	return voxel_buffer
 
+
 func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
-	# === VRAM Optimization ===
-	# Previously allocated buffers for 100% visible voxels (worst case).
-	# Now we assume only ~5–20% are actually visible to save huge VRAM usage.
-	var visibility_ratio := 0.01  # Adjust between 0.05–0.2 if you see cutoffs
+	var visibility_ratio := 0.01
 	var voxel_count = chunk_size * chunk_size * chunk_size
 	var max_visible_voxels = int(voxel_count * visibility_ratio)
 	
-	# Each visible voxel can output up to 24 vertices and 36 indices
-	var bytes_per_vertex = 8 * 4 # (3 pos + 3 normal + 2 uv) * 4 bytes
+	var bytes_per_vertex = 8 * 4
 	var max_vertices = max_visible_voxels * 24
 	var max_indices  = max_visible_voxels * 36
 
@@ -262,22 +264,20 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 		" visible voxels (", visibility_ratio * 100.0, "% of total)")
 	print("   → Max vertices: ", max_vertices, ", Max indices: ", max_indices)
 
-	# === Buffer creation ===
 	var vertex_buffer = rd.storage_buffer_create(max_vertices * bytes_per_vertex)
 	if not vertex_buffer.is_valid():
 		push_error("Failed to create vertex buffer")
 		return {}
 	
-	var index_buffer = rd.storage_buffer_create(max_indices * 4) # uint per index
+	var index_buffer = rd.storage_buffer_create(max_indices * 4)
 	if not index_buffer.is_valid():
 		push_error("Failed to create index buffer")
 		if vertex_buffer.is_valid():
 			rd.free_rid(vertex_buffer)
 		return {}
 	
-	# Counter buffer (GPU increments vertex/index counts)
 	var counter_data = PackedByteArray()
-	counter_data.resize(8) # 2 uints: vertex_count, index_count
+	counter_data.resize(8)
 	counter_data.encode_u32(0, 0)
 	counter_data.encode_u32(4, 0)
 	var counter_buffer = rd.storage_buffer_create(counter_data.size(), counter_data)
@@ -287,7 +287,6 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 		if index_buffer.is_valid(): rd.free_rid(index_buffer)
 		return {}
 	
-	# Parameters buffer (chunk size + voxel size)
 	var mesh_params_data = PackedByteArray()
 	mesh_params_data.resize(8)
 	mesh_params_data.encode_u32(0, chunk_size)
@@ -300,7 +299,6 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 		if counter_buffer.is_valid(): rd.free_rid(counter_buffer)
 		return {}
 	
-	# === Uniform bindings ===
 	var uniforms = []
 	
 	var voxel_uniform = RDUniform.new()
@@ -342,7 +340,6 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 		if mesh_params_buffer.is_valid(): rd.free_rid(mesh_params_buffer)
 		return {}
 	
-	# === Pipeline ===
 	var pipeline = rd.compute_pipeline_create(mesher_shader)
 	if not pipeline.is_valid():
 		push_error("Failed to create meshing pipeline")
@@ -352,7 +349,6 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 		if mesh_params_buffer.is_valid(): rd.free_rid(mesh_params_buffer)
 		return {}
 	
-	# === Dispatch ===
 	var compute_list = rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
 	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
@@ -364,7 +360,6 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	rd.submit()
 	rd.sync()
 	
-	# === Read results ===
 	var counter_result = rd.buffer_get_data(counter_buffer)
 	var vertex_count = counter_result.decode_u32(0)
 	var index_count = counter_result.decode_u32(4)
@@ -373,15 +368,13 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	
 	if vertex_count >= max_vertices:
 		print("⚠️ WARNING: Vertex buffer limit reached (", vertex_count, "/", max_vertices, ")")
-		print("   → Try increasing visibility_ratio to avoid truncation")
-	
 	if index_count >= max_indices:
 		print("⚠️ WARNING: Index buffer limit reached (", index_count, "/", max_indices, ")")
 	
 	var vertex_data = rd.buffer_get_data(vertex_buffer)
 	var index_data = rd.buffer_get_data(index_buffer)
 	
-	# === Cleanup ===
+	# Cleanup per-run buffers/pipeline
 	if vertex_buffer.is_valid(): rd.free_rid(vertex_buffer)
 	if index_buffer.is_valid(): rd.free_rid(index_buffer)
 	if counter_buffer.is_valid(): rd.free_rid(counter_buffer)
@@ -405,11 +398,10 @@ func create_godot_mesh(mesh_data: Dictionary):
 		print("   - chunk_size: ", chunk_size, " (try 16 or 32)")
 		return
 	
-	var bytes_per_float = 4 # float is 4 bytes
-	var floats_per_vertex = 8 # 3 for pos, 3 for normal, 2 for uv
-	var bytes_per_vertex = floats_per_vertex * bytes_per_float # 32 bytes
+	var bytes_per_float = 4
+	var floats_per_vertex = 8
+	var bytes_per_vertex = floats_per_vertex * bytes_per_float
 
-	# Create vertex array
 	var vertices = PackedVector3Array()
 	var normals = PackedVector3Array()
 	var uvs = PackedVector2Array()
@@ -421,68 +413,57 @@ func create_godot_mesh(mesh_data: Dictionary):
 	for i in range(mesh_data.vertex_count):
 		var offset = i * bytes_per_vertex
 		
-		# Position (3 floats)
 		var x = mesh_data.vertex_data.decode_float(offset)
 		var y = mesh_data.vertex_data.decode_float(offset + bytes_per_float)
 		var z = mesh_data.vertex_data.decode_float(offset + 2 * bytes_per_float)
 		vertices[i] = Vector3(x, y, z)
 		
-		# Normal (3 floats)
 		var nx = mesh_data.vertex_data.decode_float(offset + 3 * bytes_per_float)
 		var ny = mesh_data.vertex_data.decode_float(offset + 4 * bytes_per_float)
 		var nz = mesh_data.vertex_data.decode_float(offset + 5 * bytes_per_float)
 		normals[i] = Vector3(nx, ny, nz)
 
-		# UV (2 floats)
 		var ux = mesh_data.vertex_data.decode_float(offset + 6 * bytes_per_float)
 		var uy = mesh_data.vertex_data.decode_float(offset + 7 * bytes_per_float)
 		uvs[i] = Vector2(ux, uy)
 	
-	# Create index array
 	var indices = PackedInt32Array()
 	indices.resize(mesh_data.index_count)
 	
 	for i in range(mesh_data.index_count):
 		indices[i] = mesh_data.index_data.decode_u32(i * 4)
 	
-	# Create mesh
 	var arrays = []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_NORMAL] = normals # Assign normals
-	arrays[Mesh.ARRAY_TEX_UV] = uvs     # Assign UVs
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
 	
 	var mesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	
-	# Create material
 	var material = StandardMaterial3D.new()
-	material.albedo_color = Color.WHITE # Change to white as texture will provide color
+	material.albedo_color = Color.WHITE
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	
-	# Add a simple texture to visualize UVs
 	var noise_texture = NoiseTexture2D.new()
 	var fast_noise_lite = FastNoiseLite.new()
 	fast_noise_lite.noise_type = FastNoiseLite.TYPE_PERLIN
 	noise_texture.noise = fast_noise_lite
 	noise_texture.width = 256
 	noise_texture.height = 256
-	noise_texture.seamless = true # Important for tiling textures
+	noise_texture.seamless = true
 	material.albedo_texture = noise_texture
 	
 	mesh.surface_set_material(0, material)
 	
-	# Apply to mesh instance
 	mesh_instance.mesh = mesh
 	
 	print("✅ Generated terrain with ", mesh_data.vertex_count, " vertices and ", mesh_data.index_count, " indices")
 	print("🎯 Terrain should now be visible with normals and UVs!")
 
+# IMPORTANT: do NOT free shared shader RIDs here; they are shared by other instances.
 func _exit_tree():
-	# Cleanup RenderingDevice resources
-	if rd:
-		if generator_shader.is_valid():
-			rd.free_rid(generator_shader)
-		if mesher_shader.is_valid():
-			rd.free_rid(mesher_shader)
+	# Do not free generator_shader/mesher_shader or rd here — they are global/shared.
+	pass
