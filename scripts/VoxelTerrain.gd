@@ -238,8 +238,6 @@ func generate_voxel_data() -> RID:
 	rd.compute_list_dispatch(compute_list, groups, groups, groups)
 	
 	rd.compute_list_end()
-	rd.submit()
-	rd.sync()
 	
 	# Cleanup - params buffer first (this auto-frees uniform_set)
 	if params_buffer.is_valid():
@@ -357,8 +355,7 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	rd.compute_list_dispatch(compute_list, groups, groups, groups)
 	
 	rd.compute_list_end()
-	rd.submit()
-	rd.sync()
+
 	
 	var counter_result = rd.buffer_get_data(counter_buffer)
 	var vertex_count = counter_result.decode_u32(0)
