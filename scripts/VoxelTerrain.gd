@@ -1,7 +1,13 @@
 @tool
 extends Node3D
 
-@export var chunk_size: int = 100:
+# Basic constants for mesh generation
+const BYTES_PER_FLOAT = 4
+const FLOATS_PER_VERTEX = 8  # position(3) + normal(3) + uv(2)
+const VERTICES_PER_CUBE = 24  # 6 faces * 4 vertices
+const INDICES_PER_CUBE = 36   # 6 faces * 6 indices
+
+@export_range(8, 256, 8) var chunk_size: int = 100:
 	set(value):
 		if chunk_size == value:
 			return
@@ -46,7 +52,6 @@ func _ready():
 		rd = RenderingServer.create_local_rendering_device()
 		if not rd:
 			push_error("Failed to create RenderingDevice - compute shaders not supported")
-			push_error("Failed to create RenderingDevice - compute shaders not supported")
 			return
 		print("RenderingDevice created successfully")
 
@@ -77,9 +82,9 @@ func _on_editor_param_changed():
 			return
 	
 	# Debounce rapid editor updates (e.g. dragging sliders)
-	if _update_timer:
+	if _update_timer and _update_timer.timeout.is_connected(_do_editor_update):
 		_update_timer.timeout.disconnect(_do_editor_update)
-	_update_timer = get_tree().create_timer(0.0, false) #Disabled 0.0 means No debaunce, disabled.
+	_update_timer = get_tree().create_timer(0.0, false) #Disabled 0.0 means No debounce, disabled.
 	_update_timer.timeout.connect(_do_editor_update)
 
 
@@ -247,11 +252,9 @@ func generate_voxel_data() -> RID:
 
 func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	# Create output buffers
-	# Each vertex: 3 floats for pos, 3 for normal, 2 for uv = 8 floats total.
-	# So, 8 * 4 = 32 bytes per vertex.
-	var bytes_per_vertex = 8 * 4
-	var max_vertices = chunk_size * chunk_size * chunk_size * 24 # 6 faces * 4 vertices
-	var max_indices = chunk_size * chunk_size * chunk_size * 36  # 6 faces * 6 indices
+	var bytes_per_vertex = FLOATS_PER_VERTEX * BYTES_PER_FLOAT
+	var max_vertices = chunk_size * chunk_size * chunk_size * VERTICES_PER_CUBE
+	var max_indices = chunk_size * chunk_size * chunk_size * INDICES_PER_CUBE
 
 	# Warn about large memory allocations
 	var vertex_buffer_mb = (max_vertices * bytes_per_vertex) / (1024.0 * 1024.0)
@@ -411,9 +414,7 @@ func create_godot_mesh(mesh_data: Dictionary):
 		print("   - chunk_size: ", chunk_size, " (try 16 or 32)")
 		return
 	
-	var bytes_per_float = 4 # float is 4 bytes
-	var floats_per_vertex = 8 # 3 for pos, 3 for normal, 2 for uv
-	var bytes_per_vertex = floats_per_vertex * bytes_per_float # 32 bytes
+	var bytes_per_vertex = FLOATS_PER_VERTEX * BYTES_PER_FLOAT
 
 	# Create vertex array
 	var vertices = PackedVector3Array()
@@ -426,22 +427,22 @@ func create_godot_mesh(mesh_data: Dictionary):
 	
 	for i in range(mesh_data.vertex_count):
 		var offset = i * bytes_per_vertex
-		
+
 		# Position (3 floats)
 		var x = mesh_data.vertex_data.decode_float(offset)
-		var y = mesh_data.vertex_data.decode_float(offset + bytes_per_float)
-		var z = mesh_data.vertex_data.decode_float(offset + 2 * bytes_per_float)
+		var y = mesh_data.vertex_data.decode_float(offset + BYTES_PER_FLOAT)
+		var z = mesh_data.vertex_data.decode_float(offset + 2 * BYTES_PER_FLOAT)
 		vertices[i] = Vector3(x, y, z)
-		
+
 		# Normal (3 floats)
-		var nx = mesh_data.vertex_data.decode_float(offset + 3 * bytes_per_float)
-		var ny = mesh_data.vertex_data.decode_float(offset + 4 * bytes_per_float)
-		var nz = mesh_data.vertex_data.decode_float(offset + 5 * bytes_per_float)
+		var nx = mesh_data.vertex_data.decode_float(offset + 3 * BYTES_PER_FLOAT)
+		var ny = mesh_data.vertex_data.decode_float(offset + 4 * BYTES_PER_FLOAT)
+		var nz = mesh_data.vertex_data.decode_float(offset + 5 * BYTES_PER_FLOAT)
 		normals[i] = Vector3(nx, ny, nz)
 
 		# UV (2 floats)
-		var ux = mesh_data.vertex_data.decode_float(offset + 6 * bytes_per_float)
-		var uy = mesh_data.vertex_data.decode_float(offset + 7 * bytes_per_float)
+		var ux = mesh_data.vertex_data.decode_float(offset + 6 * BYTES_PER_FLOAT)
+		var uy = mesh_data.vertex_data.decode_float(offset + 7 * BYTES_PER_FLOAT)
 		uvs[i] = Vector2(ux, uy)
 	
 	# Create index array
