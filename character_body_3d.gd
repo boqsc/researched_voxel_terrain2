@@ -15,10 +15,15 @@ func _ready():
 	voxel_terrain = get_tree().get_first_node_in_group("voxel_terrain")
 	if not voxel_terrain:
 		push_warning("No voxel terrain found in scene. Make sure VoxelTerrain node is in 'voxel_terrain' group.")
-	
+
+	# Position player safely above terrain to prevent spawning inside
+	# Give terrain a moment to generate, then move player up
+	await get_tree().create_timer(0.1).timeout
+	global_position.y = 200.0  # Safe height above terrain
+
 	# Capture mouse for first-person controls
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
-	
+
 	print("✅ Player initialized, terrain: ", voxel_terrain != null)
 
 func _input(event):
