@@ -7,7 +7,7 @@ const FLOATS_PER_VERTEX = 8  # position(3) + normal(3) + uv(2)
 const VERTICES_PER_CUBE = 24  # 6 faces * 4 vertices
 const INDICES_PER_CUBE = 36   # 6 faces * 6 indices
 
-@export_range(8, 128, 8) var chunk_size: int = 100:
+@export_range(8, 256, 8) var chunk_size: int = 100:
 	set(value):
 		if chunk_size == value:
 			return
@@ -252,18 +252,19 @@ func generate_voxel_data() -> RID:
 	return voxel_buffer
 
 func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
-	# Create output buffers
-	var bytes_per_vertex = FLOATS_PER_VERTEX * BYTES_PER_FLOAT
-	var max_vertices = chunk_size * chunk_size * chunk_size * VERTICES_PER_CUBE
-	var max_indices = chunk_size * chunk_size * chunk_size * INDICES_PER_CUBE
+	# Use visibility ratio to allocate buffers efficiently
+	# Only allocate for estimated visible voxels (surface voxels), not all voxels
+	var visibility_ratio := 0.01  # 1% of voxels are typically visible (surface only)
+	var voxel_count = chunk_size * chunk_size * chunk_size
+	var max_visible_voxels = int(voxel_count * visibility_ratio)
 
-	# Warn about large memory allocations
-	var vertex_buffer_mb = (max_vertices * bytes_per_vertex) / (1024.0 * 1024.0)
-	var index_buffer_mb = (max_indices * 4) / (1024.0 * 1024.0)
-	var total_mb = vertex_buffer_mb + index_buffer_mb
-	if total_mb > 1000:
-		print("⚠️ WARNING: Allocating ", round(total_mb), " MB for chunk_size=", chunk_size)
-		print("   Consider using a smaller chunk_size to reduce memory usage")
+	var bytes_per_vertex = FLOATS_PER_VERTEX * BYTES_PER_FLOAT
+	var max_vertices = max_visible_voxels * VERTICES_PER_CUBE
+	var max_indices = max_visible_voxels * INDICES_PER_CUBE
+
+	print("📦 Allocating buffers for up to ", max_visible_voxels,
+		" visible voxels (", visibility_ratio * 100.0, "% of total)")
+	print("   → Max vertices: ", max_vertices, ", Max indices: ", max_indices)
 	
 	var vertex_buffer = rd.storage_buffer_create(max_vertices * bytes_per_vertex)
 	if not vertex_buffer.is_valid():
