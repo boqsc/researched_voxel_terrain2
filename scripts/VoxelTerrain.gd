@@ -467,18 +467,9 @@ func create_godot_mesh(mesh_data: Dictionary):
 	# Create material once and reuse it
 	if not _cached_material:
 		_cached_material = StandardMaterial3D.new()
-		_cached_material.albedo_color = Color.WHITE # Change to white as texture will provide color
+		_cached_material.albedo_color = Color(0.6, 0.5, 0.4) # Simple earth/terrain color
 		_cached_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-
-		# Add a simple texture to visualize UVs
-		var noise_texture = NoiseTexture2D.new()
-		var fast_noise_lite = FastNoiseLite.new()
-		fast_noise_lite.noise_type = FastNoiseLite.TYPE_PERLIN
-		noise_texture.noise = fast_noise_lite
-		noise_texture.width = 256
-		noise_texture.height = 256
-		noise_texture.seamless = true # Important for tiling textures
-		_cached_material.albedo_texture = noise_texture
+		# Note: No texture - avoids stuttering from NoiseTexture2D generation
 
 	mesh.surface_set_material(0, _cached_material)
 
