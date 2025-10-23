@@ -28,7 +28,7 @@ glow_enabled = true
 environment = SubResource("Environment_a0tk4")
 
 [node name="Node3D" type="Node3D" parent="."]
-transform = Transform3D(1, -1.49012e-08, -1.49012e-08, -1.49012e-08, 1, -2.98023e-08, -1.49012e-08, 0, 1, 0, 20.893, 0)
+transform = Transform3D(1, -1.49012e-08, -1.49012e-08, -1.49012e-08, 1, -2.98023e-08, -1.49012e-08, 0, 1, 157.30644, 375.43115, 142.19836)
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="Node3D"]
 transform = Transform3D(-0.8660253, -0.4330129, 0.25000006, -2.7805912e-08, 0.49999994, 0.86602545, -0.50000024, 0.74999994, -0.43301255, -72.45088, 63.606453, -110.14688)
@@ -51,27 +51,27 @@ mesh = SubResource("CapsuleMesh_noarx")
 transform = Transform3D(34.875, 0, 0, 0, 34.875, 0, 0, 0, 34.875, 119.99788, 212.77443, 92.88375)
 
 [node name="VoxelTerrain" type="Node3D" parent="Node3D2" groups=["voxel_terrain"]]
-transform = Transform3D(0.028673833, 0, 0, 0, 0.028673833, 0, 0, 0, 0.028673833, -3.4407992, -6.1010585, -2.6633332)
+transform = Transform3D(0.028673833, 0, 0, 0, 0.028673833, 0, 0, 0, 0.028673833, -3.441, 0, -2.663)
 script = ExtResource("1_a202f")
 chunk_size = 210
 
 [node name="VoxelTerrain2" type="Node3D" parent="Node3D2" groups=["voxel_terrain"]]
-transform = Transform3D(0.028673831, 0, 0, 0, 0.028673831, 0, 0, 0, 0.028673831, -3.440799, -6.101058, 3.4889796)
+transform = Transform3D(0.028673831, 0, 0, 0, 0.028673831, 0, 0, 0, 0.028673831, -3.441, 0, 3.489)
 script = ExtResource("1_a202f")
 chunk_size = 210
 
 [node name="VoxelTerrain3" type="Node3D" parent="Node3D2" groups=["voxel_terrain"]]
-transform = Transform3D(0.028673831, 0, 0, 0, 0.028673831, 0, 0, 0, 0.028673831, 3.1027055, -6.101058, -2.663333)
+transform = Transform3D(0.028673831, 0, 0, 0, 0.028673831, 0, 0, 0, 0.028673831, 2.58, 0, -2.663)
 script = ExtResource("1_a202f")
 chunk_size = 210
 
 [node name="VoxelTerrain4" type="Node3D" parent="Node3D2" groups=["voxel_terrain"]]
-transform = Transform3D(0.028673822, 0, 0, 0, 0.028673822, 0, 0, 0, 0.028673822, 3.0676727, -6.1010556, 3.6702316)
+transform = Transform3D(0.028673822, 0, 0, 0, 0.028673822, 0, 0, 0, 0.028673822, 2.58, 0, 3.36)
 script = ExtResource("1_a202f")
 chunk_size = 210
 
 [node name="CSGBox3D" type="CSGBox3D" parent="."]
-transform = Transform3D(700, 0, 0, 0, 34.875, 0, 0, 0, 1200, 124.658, 94.66432, 92.884)
+transform = Transform3D(700, 0, 0, 0, 34.875, 0, 0, 0, 1200, 124.658, 305, 92.884)
 visible = false
 use_collision = true
 material = SubResource("StandardMaterial3D_noarx")
