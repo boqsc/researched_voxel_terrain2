@@ -14,21 +14,21 @@ const INDICES_PER_CUBE = 36   # 6 faces * 6 indices
 		chunk_size = value
 		_on_editor_param_changed()
 
-@export var voxel_size: float = 1.0:
+@export_range(0.1, 10.0, 0.1) var voxel_size: float = 1.0:
 	set(value):
 		if voxel_size == value:
 			return
 		voxel_size = value
 		_on_editor_param_changed()
 
-@export var noise_scale: float = 0.1:
+@export_range(0.001, 1.0, 0.001) var noise_scale: float = 0.1:
 	set(value):
 		if noise_scale == value:
 			return
 		noise_scale = value
 		_on_editor_param_changed()
 
-@export var height_scale: float = 8.0:
+@export_range(-20.0, 20.0, 0.1) var height_scale: float = 8.0:
 	set(value):
 		if height_scale == value:
 			return
@@ -40,6 +40,7 @@ var generator_shader: RID
 var mesher_shader: RID
 var mesh_instance: MeshInstance3D
 var _update_timer: SceneTreeTimer
+var _cached_material: StandardMaterial3D
 
 func _ready():
 	if Engine.is_editor_hint():
@@ -462,27 +463,31 @@ func create_godot_mesh(mesh_data: Dictionary):
 	
 	var mesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	
-	# Create material
-	var material = StandardMaterial3D.new()
-	material.albedo_color = Color.WHITE # Change to white as texture will provide color
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	
-	# Add a simple texture to visualize UVs
-	var noise_texture = NoiseTexture2D.new()
-	var fast_noise_lite = FastNoiseLite.new()
-	fast_noise_lite.noise_type = FastNoiseLite.TYPE_PERLIN
-	noise_texture.noise = fast_noise_lite
-	noise_texture.width = 256
-	noise_texture.height = 256
-	noise_texture.seamless = true # Important for tiling textures
-	material.albedo_texture = noise_texture
-	
-	mesh.surface_set_material(0, material)
-	
+
+	# Create material once and reuse it
+	if not _cached_material:
+		_cached_material = StandardMaterial3D.new()
+		_cached_material.albedo_color = Color.WHITE # Change to white as texture will provide color
+		_cached_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+		# Add a simple texture to visualize UVs
+		var noise_texture = NoiseTexture2D.new()
+		var fast_noise_lite = FastNoiseLite.new()
+		fast_noise_lite.noise_type = FastNoiseLite.TYPE_PERLIN
+		noise_texture.noise = fast_noise_lite
+		noise_texture.width = 256
+		noise_texture.height = 256
+		noise_texture.seamless = true # Important for tiling textures
+		_cached_material.albedo_texture = noise_texture
+
+	mesh.surface_set_material(0, _cached_material)
+
 	# Apply to mesh instance
 	mesh_instance.mesh = mesh
-	
+
+	# Add collision so terrain is walkable
+	mesh_instance.create_trimesh_collision()
+
 	print("✅ Generated terrain with ", mesh_data.vertex_count, " vertices and ", mesh_data.index_count, " indices")
 	print("🎯 Terrain should now be visible with normals and UVs!")
 
