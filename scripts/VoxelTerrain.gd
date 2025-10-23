@@ -249,9 +249,17 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	# Create output buffers
 	# Each vertex: 3 floats for pos, 3 for normal, 2 for uv = 8 floats total.
 	# So, 8 * 4 = 32 bytes per vertex.
-	var bytes_per_vertex = 8 * 4 
+	var bytes_per_vertex = 8 * 4
 	var max_vertices = chunk_size * chunk_size * chunk_size * 24 # 6 faces * 4 vertices
 	var max_indices = chunk_size * chunk_size * chunk_size * 36  # 6 faces * 6 indices
+
+	# Warn about large memory allocations
+	var vertex_buffer_mb = (max_vertices * bytes_per_vertex) / (1024.0 * 1024.0)
+	var index_buffer_mb = (max_indices * 4) / (1024.0 * 1024.0)
+	var total_mb = vertex_buffer_mb + index_buffer_mb
+	if total_mb > 1000:
+		print("⚠️ WARNING: Allocating ", round(total_mb), " MB for chunk_size=", chunk_size)
+		print("   Consider using a smaller chunk_size to reduce memory usage")
 	
 	var vertex_buffer = rd.storage_buffer_create(max_vertices * bytes_per_vertex)
 	if not vertex_buffer.is_valid():
@@ -364,7 +372,19 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	var counter_result = rd.buffer_get_data(counter_buffer)
 	var vertex_count = counter_result.decode_u32(0) # This is the *actual* vertex count
 	var index_count = counter_result.decode_u32(4)
-	
+
+	print("📈 GPU wrote ", vertex_count, " vertices, ", index_count, " indices")
+
+	# Safety: Clamp to buffer limits to prevent reading beyond allocated memory
+	if vertex_count > max_vertices:
+		print("⚠️ WARNING: GPU reported ", vertex_count, " vertices, but buffer only holds ", max_vertices)
+		print("   Clamping to buffer size to prevent crash/freeze")
+		vertex_count = max_vertices
+	if index_count > max_indices:
+		print("⚠️ WARNING: GPU reported ", index_count, " indices, but buffer only holds ", max_indices)
+		print("   Clamping to buffer size to prevent crash/freeze")
+		index_count = max_indices
+
 	var vertex_data = rd.buffer_get_data(vertex_buffer)
 	var index_data = rd.buffer_get_data(index_buffer)
 	
