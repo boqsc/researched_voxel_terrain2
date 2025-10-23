@@ -482,11 +482,8 @@ func create_godot_mesh(mesh_data: Dictionary):
 		if child is StaticBody3D:
 			child.queue_free()
 
-	# COLLISION DISABLED - trimesh collision doesn't work well for voxel terrain
-	# Problem: 84k+ triangles cause physics engine to fail
-	# Player sinks into surface and gets stuck halfway through
-	# Proper solution needs: simplified collision mesh or box colliders per voxel
-	# mesh_instance.create_trimesh_collision()
+	# Add collision - triangle winding now matches inverted normals
+	mesh_instance.create_trimesh_collision()
 
 	print("✅ Generated terrain with ", mesh_data.vertex_count, " vertices and ", mesh_data.index_count, " indices")
 	print("🎯 Terrain should now be visible with normals and UVs!")

@@ -64,7 +64,8 @@ const vec2 face_uvs[4] = vec2[](
 );
 
 // Triangle indices for each face (2 triangles)
-const uint face_indices[6] = uint[](0, 1, 2, 2, 3, 0);
+// Reversed winding (clockwise) to match inverted normals for proper collision
+const uint face_indices[6] = uint[](0, 2, 1, 2, 0, 3);
 
 float get_density(ivec3 pos) {
     if (pos.x < 0 || pos.x >= int(mesh_params.chunk_size) ||
