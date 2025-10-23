@@ -1,3 +1,4 @@
+@tool
 extends Node3D
 
 # VoxelChunk: Individual chunk representation (just holds mesh + collision)

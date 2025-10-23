@@ -1,3 +1,4 @@
+@tool
 extends Node
 
 # VoxelWorld: Centralized GPU resource management and chunk coordination
