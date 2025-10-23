@@ -4,20 +4,65 @@ extends Node3D
 # VoxelTerrain: Chunk manager (manages chunk spawning/unloading based on player position)
 # Does NOT do GPU work - that's handled by VoxelWorld singleton
 
+# Chunk loading settings
 @export_range(1, 10, 1) var chunk_load_radius: int = 3  # Load chunks within N chunks of player
 @export var auto_load_chunks: bool = true  # Automatically load chunks around player
+
+# Terrain generation parameters (updates VoxelWorld singleton)
+@export_range(8, 256, 8) var chunk_size: int = 80:
+	set(value):
+		chunk_size = value
+		if VoxelWorld:
+			VoxelWorld.chunk_size = value
+
+@export_range(0.1, 10.0, 0.1) var voxel_size: float = 1.0:
+	set(value):
+		voxel_size = value
+		if VoxelWorld:
+			VoxelWorld.voxel_size = value
+
+@export_range(0.001, 1.0, 0.001) var noise_scale: float = 0.1:
+	set(value):
+		noise_scale = value
+		if VoxelWorld:
+			VoxelWorld.noise_scale = value
+
+@export_range(-20.0, 20.0, 0.1) var height_scale: float = 8.0:
+	set(value):
+		height_scale = value
+		if VoxelWorld:
+			VoxelWorld.height_scale = value
+
+@export_range(0.005, 0.1, 0.005) var visibility_ratio: float = 0.01:
+	set(value):
+		visibility_ratio = value
+		if VoxelWorld:
+			VoxelWorld.visibility_ratio = value
 
 var player: Node3D
 var active_chunks: Dictionary = {}  # Vector3i -> VoxelChunk instance
 var last_player_chunk: Vector3i = Vector3i(999999, 999999, 999999)  # Force initial load
+var initial_chunks_requested: bool = false
 
 func _ready():
+	# Apply parameters to VoxelWorld
+	if VoxelWorld:
+		VoxelWorld.chunk_size = chunk_size
+		VoxelWorld.voxel_size = voxel_size
+		VoxelWorld.noise_scale = noise_scale
+		VoxelWorld.height_scale = height_scale
+		VoxelWorld.visibility_ratio = visibility_ratio
+
 	if Engine.is_editor_hint():
 		print("🧰 VoxelTerrain running in editor mode")
 		# In editor, generate a single chunk at origin for preview
 		_request_single_chunk(Vector3i.ZERO)
 	else:
 		print("▶️ VoxelTerrain running in game mode")
+		# In game mode, generate initial chunks immediately at origin
+		# This ensures player has ground to land on
+		print("🌍 Generating initial chunks at origin...")
+		_generate_initial_chunks()
 
 	# Connect to VoxelWorld chunk_ready signal
 	if VoxelWorld:
@@ -25,6 +70,15 @@ func _ready():
 		print("✅ Connected to VoxelWorld.chunk_ready signal")
 	else:
 		push_error("VoxelWorld singleton not found! Is it registered as autoload?")
+
+func _generate_initial_chunks():
+	"""Generate initial chunks around origin so player has ground to spawn on"""
+	# Generate chunks in a 3x3 grid at y=0 (ground level)
+	for x in range(-1, 2):
+		for z in range(-1, 2):
+			VoxelWorld.request_chunk(Vector3i(x, 0, z))
+	initial_chunks_requested = true
+	print("   📋 Requested 9 initial chunks (3x3 grid at ground level)")
 
 func _process(_delta):
 	if Engine.is_editor_hint():
