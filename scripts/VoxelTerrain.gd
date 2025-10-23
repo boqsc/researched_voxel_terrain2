@@ -469,7 +469,7 @@ func create_godot_mesh(mesh_data: Dictionary):
 	if not _cached_material:
 		_cached_material = StandardMaterial3D.new()
 		_cached_material.albedo_color = Color(0.6, 0.5, 0.4) # Simple earth/terrain color
-		_cached_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_cached_material.cull_mode = BaseMaterial3D.CULL_BACK # Proper backface culling (triangle winding is now correct)
 		# Note: No texture - avoids stuttering from NoiseTexture2D generation
 
 	mesh.surface_set_material(0, _cached_material)
