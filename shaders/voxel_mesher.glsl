@@ -82,7 +82,12 @@ void create_face(uint face_id, ivec3 voxel_pos) {
     // So, 4 vertices per face * 8 floats/vertex = 32 floats for a face.
     uint base_vertex_float_idx = atomicAdd(counter.vertex_count, 4) * 8; // Increment by 4 vertices, convert to float index
     uint base_index = atomicAdd(counter.index_count, 6);
-    
+
+    // Safety: Check if we have space in buffers before writing
+    // This prevents GPU memory corruption when buffer is full
+    if (base_vertex_float_idx + 32 > vertex_data.data.length()) return;
+    if (base_index + 6 > index_data.indices.length()) return;
+
     vec3 normal = face_normals[face_id];
 
     // Generate 4 vertices for this face

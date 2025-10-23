@@ -7,7 +7,7 @@ const FLOATS_PER_VERTEX = 8  # position(3) + normal(3) + uv(2)
 const VERTICES_PER_CUBE = 24  # 6 faces * 4 vertices
 const INDICES_PER_CUBE = 36   # 6 faces * 6 indices
 
-@export_range(8, 256, 8) var chunk_size: int = 100:
+@export_range(8, 128, 8) var chunk_size: int = 100:
 	set(value):
 		if chunk_size == value:
 			return
@@ -493,3 +493,6 @@ func _exit_tree():
 			rd.free_rid(generator_shader)
 		if mesher_shader.is_valid():
 			rd.free_rid(mesher_shader)
+		# Free the local rendering device to prevent memory leak
+		rd.free()
+		rd = null
