@@ -477,6 +477,11 @@ func create_godot_mesh(mesh_data: Dictionary):
 	# Apply to mesh instance
 	mesh_instance.mesh = mesh
 
+	# Clean up old collision bodies first
+	for child in mesh_instance.get_children():
+		if child is StaticBody3D:
+			child.queue_free()
+
 	# Add collision so terrain is walkable
 	# Now safe with visibility_ratio - only surface voxels, not all voxels
 	mesh_instance.create_trimesh_collision()
