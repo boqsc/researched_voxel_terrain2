@@ -512,14 +512,15 @@ func create_godot_mesh(mesh_data: Dictionary):
 		if child is StaticBody3D:
 			child.queue_free()
 
-	# COLLISION DISABLED - trimesh collision is 99% of generation time
-	# Performance measurements showed: GPU=7ms, Collision=1125ms (chunk_size=100)
-	# For multi-chunk systems, collision needs to be simplified/disabled
-	# mesh_instance.create_trimesh_collision()
+	# Re-enable collision for single-chunk testing
+	# Note: For multi-chunk, this will need optimization (heightmap collision, etc.)
+	var collision_start = Time.get_ticks_msec()
+	mesh_instance.create_trimesh_collision()
+	var collision_time = Time.get_ticks_msec() - collision_start
 
 	print("✅ Generated terrain with ", mesh_data.vertex_count, " vertices and ", mesh_data.index_count, " indices")
-	print("   ⚠️ No collision - trimesh collision disabled for performance")
-	print("🎯 Terrain should now be visible with normals and UVs!")
+	print("   🎯 Collision created in ", collision_time, "ms")
+	print("🎯 Terrain should now be visible with collision!")
 
 func _exit_tree():
 	# Cleanup RenderingDevice resources
