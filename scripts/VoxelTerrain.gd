@@ -271,8 +271,11 @@ func generate_voxel_data() -> RID:
 func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	# Use visibility ratio to allocate buffers efficiently
 	# Only allocate for estimated visible voxels (surface voxels), not all voxels
+	# Ensure visibility_ratio is set (defaults to 1% if not)
+	var vis_ratio = visibility_ratio if visibility_ratio else 0.01
+
 	var voxel_count = chunk_size * chunk_size * chunk_size
-	var max_visible_voxels = int(voxel_count * visibility_ratio)
+	var max_visible_voxels = int(voxel_count * vis_ratio)
 
 	var bytes_per_vertex = FLOATS_PER_VERTEX * BYTES_PER_FLOAT
 	var max_vertices = max_visible_voxels * VERTICES_PER_CUBE
@@ -284,7 +287,7 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	var total_mb = vertex_buffer_mb + index_buffer_mb
 
 	print("📦 Allocating buffers for up to ", max_visible_voxels,
-		" visible voxels (", visibility_ratio * 100.0, "% of total)")
+		" visible voxels (", vis_ratio * 100.0, "% of total)")
 	print("   → Max vertices: ", max_vertices, ", Max indices: ", max_indices)
 	print("   💾 Memory: ", "%.2f" % total_mb, " MB (vertex: ", "%.2f" % vertex_buffer_mb, " MB, index: ", "%.2f" % index_buffer_mb, " MB)")
 	
