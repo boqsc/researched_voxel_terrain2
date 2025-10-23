@@ -35,6 +35,13 @@ const INDICES_PER_CUBE = 36   # 6 faces * 6 indices
 		height_scale = value
 		_on_editor_param_changed()
 
+@export_range(0.005, 0.1, 0.005) var visibility_ratio: float = 0.01:
+	set(value):
+		if visibility_ratio == value:
+			return
+		visibility_ratio = value
+		_on_editor_param_changed()
+
 var rd: RenderingDevice
 var generator_shader: RID
 var mesher_shader: RID
@@ -137,18 +144,23 @@ func load_shaders() -> bool:
 	return true
 
 func generate_terrain():
+	var start_time = Time.get_ticks_msec()
+
 	print("🏗️ Starting terrain generation...")
 	print("   📊 Parameters: chunk_size=", chunk_size, ", noise_scale=", noise_scale, ", height_scale=", height_scale)
-	
+
 	# Step 1: Generate voxel data
+	var voxel_gen_start = Time.get_ticks_msec()
 	var voxel_data_buffer = generate_voxel_data()
 	if not voxel_data_buffer.is_valid():
 		push_error("Failed to generate voxel data")
 		return
-	
-	print("✅ Voxel data generated successfully")
-	
+	var voxel_gen_time = Time.get_ticks_msec() - voxel_gen_start
+
+	print("✅ Voxel data generated in ", voxel_gen_time, "ms")
+
 	# Step 2: Generate mesh from voxel data
+	var mesh_gen_start = Time.get_ticks_msec()
 	var mesh_data = generate_mesh(voxel_data_buffer)
 	if mesh_data.is_empty() or mesh_data.vertex_count == 0:
 		push_error("Failed to generate mesh or no vertices generated")
@@ -156,14 +168,19 @@ func generate_terrain():
 		if voxel_data_buffer.is_valid():
 			rd.free_rid(voxel_data_buffer)
 		return
-	
-	print("✅ Mesh data generated successfully")
-	
+	var mesh_gen_time = Time.get_ticks_msec() - mesh_gen_start
+
+	print("✅ Mesh data generated in ", mesh_gen_time, "ms")
+
 	# Step 3: Create Godot mesh
+	var godot_mesh_start = Time.get_ticks_msec()
 	create_godot_mesh(mesh_data)
-	
-	print("🎉 Terrain generation completed!")
-	
+	var godot_mesh_time = Time.get_ticks_msec() - godot_mesh_start
+
+	var total_time = Time.get_ticks_msec() - start_time
+	print("🎉 Terrain generation completed in ", total_time, "ms")
+	print("   ⏱️ Breakdown: Voxel=", voxel_gen_time, "ms, Mesh=", mesh_gen_time, "ms, Godot=", godot_mesh_time, "ms")
+
 	# Cleanup
 	if voxel_data_buffer.is_valid():
 		rd.free_rid(voxel_data_buffer)
@@ -254,7 +271,6 @@ func generate_voxel_data() -> RID:
 func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	# Use visibility ratio to allocate buffers efficiently
 	# Only allocate for estimated visible voxels (surface voxels), not all voxels
-	var visibility_ratio := 0.01  # 1% of voxels are typically visible (surface only)
 	var voxel_count = chunk_size * chunk_size * chunk_size
 	var max_visible_voxels = int(voxel_count * visibility_ratio)
 
@@ -262,9 +278,15 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	var max_vertices = max_visible_voxels * VERTICES_PER_CUBE
 	var max_indices = max_visible_voxels * INDICES_PER_CUBE
 
+	# Calculate memory usage
+	var vertex_buffer_mb = (max_vertices * bytes_per_vertex) / (1024.0 * 1024.0)
+	var index_buffer_mb = (max_indices * 4) / (1024.0 * 1024.0)
+	var total_mb = vertex_buffer_mb + index_buffer_mb
+
 	print("📦 Allocating buffers for up to ", max_visible_voxels,
 		" visible voxels (", visibility_ratio * 100.0, "% of total)")
 	print("   → Max vertices: ", max_vertices, ", Max indices: ", max_indices)
+	print("   💾 Memory: ", "%.2f" % total_mb, " MB (vertex: ", "%.2f" % vertex_buffer_mb, " MB, index: ", "%.2f" % index_buffer_mb, " MB)")
 	
 	var vertex_buffer = rd.storage_buffer_create(max_vertices * bytes_per_vertex)
 	if not vertex_buffer.is_valid():
