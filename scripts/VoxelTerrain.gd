@@ -274,6 +274,11 @@ func generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 	# Ensure visibility_ratio is set (defaults to 1% if not)
 	var vis_ratio = visibility_ratio if visibility_ratio else 0.01
 
+	# Smaller chunks have higher surface-to-volume ratio, adjust visibility_ratio
+	if chunk_size < 100:
+		vis_ratio = 0.05 if chunk_size < 50 else 0.03
+		print("   📐 Auto-adjusted visibility_ratio to ", vis_ratio * 100.0, "% for small chunk_size")
+
 	var voxel_count = chunk_size * chunk_size * chunk_size
 	var max_visible_voxels = int(voxel_count * vis_ratio)
 
@@ -507,10 +512,13 @@ func create_godot_mesh(mesh_data: Dictionary):
 		if child is StaticBody3D:
 			child.queue_free()
 
-	# Add collision - triangle winding now matches inverted normals
-	mesh_instance.create_trimesh_collision()
+	# COLLISION DISABLED - trimesh collision is 99% of generation time
+	# Performance measurements showed: GPU=7ms, Collision=1125ms (chunk_size=100)
+	# For multi-chunk systems, collision needs to be simplified/disabled
+	# mesh_instance.create_trimesh_collision()
 
 	print("✅ Generated terrain with ", mesh_data.vertex_count, " vertices and ", mesh_data.index_count, " indices")
+	print("   ⚠️ No collision - trimesh collision disabled for performance")
 	print("🎯 Terrain should now be visible with normals and UVs!")
 
 func _exit_tree():
