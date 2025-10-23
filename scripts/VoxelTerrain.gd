@@ -485,8 +485,10 @@ func create_godot_mesh(mesh_data: Dictionary):
 	# Apply to mesh instance
 	mesh_instance.mesh = mesh
 
-	# Add collision so terrain is walkable
-	mesh_instance.create_trimesh_collision()
+	# Add collision so terrain is walkable (disabled for large meshes for now)
+	# Note: create_trimesh_collision() can be very slow/problematic with large meshes
+	# TODO: Implement proper collision for large terrains
+	# mesh_instance.create_trimesh_collision()
 
 	print("✅ Generated terrain with ", mesh_data.vertex_count, " vertices and ", mesh_data.index_count, " indices")
 	print("🎯 Terrain should now be visible with normals and UVs!")
