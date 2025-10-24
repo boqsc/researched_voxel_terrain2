@@ -153,9 +153,16 @@ func _generate_chunk_async(chunk_pos: Vector3i):
 	var mesh_gen_start = Time.get_ticks_msec()
 	var mesh_data = _generate_mesh(voxel_data_buffer)
 	if mesh_data.is_empty() or mesh_data.vertex_count == 0:
-		push_error("Failed to generate mesh for chunk ", chunk_pos)
+		# Empty chunk (no solid voxels) - this is normal for air chunks above ground
+		# Just cleanup and skip without error
 		if voxel_data_buffer.is_valid():
 			rd.free_rid(voxel_data_buffer)
+		# Mark as generated so we don't try again
+		chunks[chunk_pos] = {
+			"position": chunk_pos,
+			"generated_at": Time.get_ticks_msec(),
+			"empty": true
+		}
 		return
 	var mesh_gen_time = Time.get_ticks_msec() - mesh_gen_start
 
