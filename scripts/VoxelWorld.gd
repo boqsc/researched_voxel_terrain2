@@ -15,9 +15,13 @@ var chunks: Dictionary = {}  # Vector3i -> ChunkData
 var generation_queue: Array = []  # Array of Vector3i positions to generate (GPU work)
 @export_range(1, 100, 1) var chunk_generation_cpu_percent: int = 10  # % of frame time budget for decoding (10% = 1.6ms/frame)
 @export var generate_collision: bool = false  # Generate collision during chunk loading (slower but safer)
+@export var gpu_only_rendering: bool = false  # 🚀 EXPERIMENTAL: GPU-only rendering (no CPU decode, instant chunks!)
 
 # Incremental decoder (handles slow CPU decode work)
 var chunk_decoder: Node = null
+
+# GPU-only mode: Store GPU buffers for direct rendering
+var gpu_buffers: Dictionary = {}  # Vector3i -> {vertex_buffer: RID, index_buffer: RID, vertex_count, index_count}
 
 # Chunk parameters (shared by all chunks)
 @export_range(8, 256, 8) var chunk_size: int = 80
@@ -181,11 +185,23 @@ func _generate_chunk_async(chunk_pos: Vector3i):
 		"position": chunk_pos,
 		"generated_at": Time.get_ticks_msec(),
 		"gpu_complete": true,
-		"decode_complete": false
+		"decode_complete": not gpu_only_rendering  # GPU-only mode is instantly ready!
 	}
 
-	# Pass to ChunkDecoder for incremental decode (slow CPU work)
-	chunk_decoder.add_decode_job(chunk_pos, mesh_data, generate_collision)
+	# GPU-only mode: Emit immediately (no CPU decode needed!)
+	if gpu_only_rendering:
+		# Store GPU buffers for later cleanup
+		gpu_buffers[chunk_pos] = {
+			"vertex_buffer": mesh_data.vertex_buffer_rid,
+			"index_buffer": mesh_data.index_buffer_rid
+		}
+
+		# Emit immediately - chunk is ready to render from GPU!
+		print("🚀 GPU-only chunk ", chunk_pos, " ready instantly!")
+		emit_signal("chunk_ready", chunk_pos, mesh_data, false)  # No collision in GPU-only mode
+	else:
+		# Traditional mode: Pass to ChunkDecoder for incremental decode (slow CPU work)
+		chunk_decoder.add_decode_job(chunk_pos, mesh_data, generate_collision)
 
 func _generate_voxel_data(chunk_pos: Vector3i) -> RID:
 	"""Generate voxel data for a chunk using GPU compute shader"""
@@ -405,24 +421,52 @@ func _generate_mesh(voxel_data_buffer: RID) -> Dictionary:
 		print("⚠️ WARNING: GPU reported ", index_count, " indices, clamping to ", max_indices)
 		index_count = max_indices
 
-	var vertex_data = rd.buffer_get_data(vertex_buffer)
-	var index_data = rd.buffer_get_data(index_buffer)
+	# GPU-only mode: Keep buffers on GPU, don't copy to CPU!
+	if gpu_only_rendering:
+		# Cleanup temporary buffers only
+		if counter_buffer.is_valid(): rd.free_rid(counter_buffer)
+		if mesh_params_buffer.is_valid(): rd.free_rid(mesh_params_buffer)
+		if pipeline.is_valid(): rd.free_rid(pipeline)
 
-	# Cleanup
-	if vertex_buffer.is_valid(): rd.free_rid(vertex_buffer)
-	if index_buffer.is_valid(): rd.free_rid(index_buffer)
-	if counter_buffer.is_valid(): rd.free_rid(counter_buffer)
-	if mesh_params_buffer.is_valid(): rd.free_rid(mesh_params_buffer)
-	if pipeline.is_valid(): rd.free_rid(pipeline)
+		# Return GPU buffer handles (NO DATA TRANSFER!)
+		return {
+			"vertex_count": vertex_count,
+			"index_count": index_count,
+			"vertex_buffer_rid": vertex_buffer,  # Keep on GPU!
+			"index_buffer_rid": index_buffer,    # Keep on GPU!
+			"gpu_only": true
+		}
+	else:
+		# Traditional mode: Copy to CPU for decode
+		var vertex_data = rd.buffer_get_data(vertex_buffer)
+		var index_data = rd.buffer_get_data(index_buffer)
 
-	return {
-		"vertex_count": vertex_count,
-		"index_count": index_count,
-		"vertex_data": vertex_data,
-		"index_data": index_data
-	}
+		# Cleanup all buffers
+		if vertex_buffer.is_valid(): rd.free_rid(vertex_buffer)
+		if index_buffer.is_valid(): rd.free_rid(index_buffer)
+		if counter_buffer.is_valid(): rd.free_rid(counter_buffer)
+		if mesh_params_buffer.is_valid(): rd.free_rid(mesh_params_buffer)
+		if pipeline.is_valid(): rd.free_rid(pipeline)
+
+		return {
+			"vertex_count": vertex_count,
+			"index_count": index_count,
+			"vertex_data": vertex_data,
+			"index_data": index_data,
+			"gpu_only": false
+		}
 
 func _exit_tree():
+	# Cleanup GPU buffers (if using GPU-only mode)
+	if rd and gpu_only_rendering:
+		for chunk_pos in gpu_buffers.keys():
+			var buffers = gpu_buffers[chunk_pos]
+			if buffers.vertex_buffer.is_valid():
+				rd.free_rid(buffers.vertex_buffer)
+			if buffers.index_buffer.is_valid():
+				rd.free_rid(buffers.index_buffer)
+		gpu_buffers.clear()
+
 	# Cleanup shared RenderingDevice resources
 	if rd:
 		if generator_shader.is_valid():

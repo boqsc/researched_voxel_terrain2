@@ -21,6 +21,13 @@ extends Node3D
 		if VoxelWorld:
 			VoxelWorld.generate_collision = value
 
+@export var gpu_only_rendering: bool = false:  # 🚀 EXPERIMENTAL: GPU-only rendering (instant chunks, no CPU decode!)
+	set(value):
+		gpu_only_rendering = value
+		if VoxelWorld:
+			VoxelWorld.gpu_only_rendering = value
+		_on_editor_param_changed()
+
 # Editor preview settings
 @export_range(1, 20, 1) var editor_preview_chunks: int = 1:  # How many chunks to show in editor (was max 5, now 20)
 	set(value):
@@ -242,8 +249,14 @@ func _on_chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary, enable_collisio
 
 	print("📦 Spawning chunk at ", chunk_pos)
 
-	# Create chunk instance
-	var chunk = preload("res://scripts/VoxelChunk.gd").new(chunk_pos)
+	# Create chunk instance (GPU-only or traditional)
+	var chunk
+	if mesh_data.get("gpu_only", false):
+		# GPU-only mode: Use VoxelChunkGPU for direct rendering
+		chunk = preload("res://scripts/VoxelChunkGPU.gd").new(chunk_pos)
+	else:
+		# Traditional mode: Use VoxelChunk with CPU decode
+		chunk = preload("res://scripts/VoxelChunk.gd").new(chunk_pos)
 
 	# Add to scene FIRST (required before setting global_position)
 	add_child(chunk)
@@ -254,8 +267,13 @@ func _on_chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary, enable_collisio
 	var chunk_world_size = _chunk_size * _voxel_size
 	chunk.global_position = Vector3(chunk_pos) * chunk_world_size
 
-	# Apply mesh data with collision setting
-	chunk.apply_mesh_data(mesh_data, enable_collision)
+	# Apply mesh data
+	if mesh_data.get("gpu_only", false):
+		# GPU-only mode: Pass GPU buffer handles directly
+		chunk.apply_gpu_mesh_data(mesh_data, VoxelWorld.rd, null)  # TODO: Pass render pipeline
+	else:
+		# Traditional mode: CPU decode path
+		chunk.apply_mesh_data(mesh_data, enable_collision)
 
 	# Track active chunk
 	active_chunks[chunk_pos] = chunk
