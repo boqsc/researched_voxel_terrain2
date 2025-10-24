@@ -210,7 +210,32 @@ func _process(_delta):
 		if VoxelWorld:
 			VoxelWorld.player_chunk_position = player_chunk_pos
 
+		# Update collision for chunks based on new player position
+		_update_collision_for_nearby_chunks(player_chunk_pos)
+
 		update_chunks_around_player(player_chunk_pos)
+
+func _update_collision_for_nearby_chunks(player_chunk_pos: Vector3i):
+	"""Check all active chunks and add collision to chunks that are now within collision_radius"""
+	if not generate_collision or collision_radius == 0:
+		return  # Collision disabled globally
+
+	var chunks_needing_collision = []
+
+	# Check all active chunks
+	for chunk_pos in active_chunks.keys():
+		var chunk = active_chunks[chunk_pos]
+		var distance = _chunk_distance(chunk_pos, player_chunk_pos)
+
+		# If chunk is within collision radius but doesn't have collision yet
+		if distance <= collision_radius and not chunk.has_collision:
+			chunks_needing_collision.append(chunk_pos)
+
+	# Request collision for chunks that need it
+	if chunks_needing_collision.size() > 0:
+		print("   🔄 Requesting collision for ", chunks_needing_collision.size(), " chunks now in range")
+		if VoxelWorld:
+			VoxelWorld.request_collision_for_chunks(chunks_needing_collision, active_chunks)
 
 func world_to_chunk(world_pos: Vector3) -> Vector3i:
 	"""Convert world position to chunk position"""

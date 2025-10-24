@@ -472,6 +472,26 @@ func _chunk_distance(a: Vector3i, b: Vector3i) -> float:
 	var diff = a - b
 	return sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z)
 
+func request_collision_for_chunks(chunk_positions: Array, active_chunks: Dictionary):
+	"""Request collision generation for specific chunks (called when player moves close)"""
+	for chunk_pos in chunk_positions:
+		# Check if chunk exists and has mesh data
+		if not active_chunks.has(chunk_pos):
+			continue
+
+		var chunk = active_chunks[chunk_pos]
+		if chunk.has_collision:
+			continue  # Already has collision
+
+		# Queue collision generation
+		# We need the mesh_data, but chunks already have their mesh applied
+		# So we'll signal directly to add collision from existing mesh
+		collision_queue.append({
+			"chunk_pos": chunk_pos,
+			"mesh_data": {}  # Empty dict since we'll use existing mesh
+		})
+		print("   ⏳ Collision queued for chunk ", chunk_pos, " (player moved closer, ", collision_queue.size(), " in queue)")
+
 func _generate_collision_for_chunk(chunk_pos: Vector3i, mesh_data: Dictionary):
 	"""Generate collision for a chunk (called one per frame from _process)"""
 	var collision_start = Time.get_ticks_msec()

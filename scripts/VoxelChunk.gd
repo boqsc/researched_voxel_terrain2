@@ -8,6 +8,7 @@ extends Node3D
 var chunk_position: Vector3i
 var mesh_instance: MeshInstance3D
 var state: ChunkState = ChunkState.UNLOADED
+var has_collision: bool = false  # Track if collision has been generated
 
 enum ChunkState {
 	UNLOADED,
@@ -132,10 +133,15 @@ func add_collision(mesh_data: Dictionary):
 		push_error("Cannot add collision to chunk ", chunk_position, " - no mesh exists")
 		return
 
+	if has_collision:
+		print("   ⚠️ Chunk ", chunk_position, " already has collision, skipping")
+		return
+
 	var collision_start = Time.get_ticks_msec()
 	mesh_instance.create_trimesh_collision()
 	var collision_time = Time.get_ticks_msec() - collision_start
 
+	has_collision = true
 	print("   🔷 Chunk ", chunk_position, " collision added in ", collision_time, "ms")
 
 func cleanup():
