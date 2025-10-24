@@ -13,7 +13,8 @@ var mesher_shader: RID
 # Chunk management
 var chunks: Dictionary = {}  # Vector3i -> ChunkData
 var generation_queue: Array = []  # Array of Vector3i positions to generate
-var chunks_per_frame: int = 1  # Generate 1 chunk per frame to avoid freezing
+@export_range(1, 100, 1) var chunk_generation_cpu_percent: int = 10  # % of frames to dedicate to chunk generation
+var _frame_counter: int = 0  # Used to throttle chunk generation based on CPU percentage
 
 # Chunk parameters (shared by all chunks)
 @export_range(8, 256, 8) var chunk_size: int = 80
@@ -50,12 +51,28 @@ func _ready():
 	print("🎉 VoxelWorld ready - all chunks will share ONE RenderingDevice")
 
 func _process(_delta):
-	# Generate chunks asynchronously (1 per frame to prevent freezing)
-	if generation_queue.size() > 0:
-		var chunks_to_generate = min(chunks_per_frame, generation_queue.size())
-		for i in range(chunks_to_generate):
-			var chunk_pos = generation_queue.pop_front()
-			_generate_chunk_async(chunk_pos)
+	# Throttle chunk generation based on CPU percentage
+	# 100% = generate every frame (laggy but fast terrain gen)
+	# 10% = generate every 10th frame (smooth but slower terrain gen)
+	_frame_counter += 1
+
+	if generation_queue.size() == 0:
+		return  # Nothing to generate
+
+	# Calculate if we should generate this frame based on percentage
+	# Example: 10% means generate on frames 0, 10, 20, 30... (every 10th frame)
+	var frames_between_generation = max(1, int(100.0 / chunk_generation_cpu_percent))
+
+	if (_frame_counter % frames_between_generation) != 0:
+		return  # Skip this frame, wait for next generation window
+
+	# Generate one chunk this frame
+	var chunk_pos = generation_queue.pop_front()
+	_generate_chunk_async(chunk_pos)
+
+	if generation_queue.size() > 0 and (_frame_counter % (frames_between_generation * 10)) == 0:
+		# Print status every 10 generations to avoid spam
+		print("📊 Generation progress: ", generation_queue.size(), " chunks remaining (CPU: ", chunk_generation_cpu_percent, "%)")
 
 func load_shaders() -> bool:
 	# Load voxel generator shader
