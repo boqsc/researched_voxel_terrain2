@@ -307,11 +307,11 @@ func _execute_queries(query_data: PackedFloat32Array, query_count: int) -> Array
 	var result_bytes = rd.buffer_get_data(result_buf)
 
 	# Cleanup (don't free voxel_collision_buffer - it's persistent!)
+	# Note: In Godot 4, only free the buffers we explicitly created
+	# Uniform sets and pipelines are auto-managed and shouldn't be freed
 	rd.free_rid(query_buf)
 	rd.free_rid(result_buf)
 	rd.free_rid(params_buf)
-	rd.free_rid(uniform_set)
-	rd.free_rid(pipeline)
 
 	# Parse results
 	var results = []
