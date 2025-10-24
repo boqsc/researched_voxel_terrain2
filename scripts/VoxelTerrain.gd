@@ -5,11 +5,11 @@ extends Node3D
 # Does NOT do GPU work - that's handled by VoxelWorld singleton
 
 # Chunk loading settings
-@export_range(1, 10, 1) var chunk_load_radius: int = 3  # Load chunks within N chunks of player
+@export_range(1, 50, 1) var chunk_load_radius: int = 3  # Load chunks within N chunks of player (was max 10, now 50)
 @export var auto_load_chunks: bool = true  # Automatically load chunks around player
 
 # Editor preview settings
-@export_range(1, 5, 1) var editor_preview_chunks: int = 1:  # How many chunks to show in editor (NxN grid)
+@export_range(1, 20, 1) var editor_preview_chunks: int = 1:  # How many chunks to show in editor (was max 5, now 20)
 	set(value):
 		editor_preview_chunks = value
 		_on_editor_param_changed()
@@ -107,11 +107,16 @@ func _do_editor_update():
 
 	print("🔄 Editor parameter changed — regenerating terrain...")
 
-	# Clear all existing chunks
+	# Clear all existing chunks from VoxelTerrain
 	for chunk_pos in active_chunks.keys():
 		var chunk = active_chunks[chunk_pos]
 		chunk.cleanup()
 	active_chunks.clear()
+
+	# IMPORTANT: Also clear chunks from VoxelWorld so they can be regenerated
+	if VoxelWorld:
+		VoxelWorld.chunks.clear()
+		VoxelWorld.generation_queue.clear()
 
 	# Regenerate preview
 	_generate_editor_preview()
