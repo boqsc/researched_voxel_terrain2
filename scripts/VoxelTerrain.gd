@@ -23,11 +23,17 @@ extends Node3D
 		if VoxelWorld:
 			VoxelWorld.chunk_decode_time_budget_percent = value
 
-@export var generate_collision: bool = false:  # Generate collision mesh (WARNING: ~200-300ms per chunk on CPU, causes stutters)
+@export var generate_collision: bool = false:  # Generate collision mesh (WARNING: ~200ms per chunk on CPU, causes stutters if collision_radius is too large)
 	set(value):
 		generate_collision = value
 		if VoxelWorld:
 			VoxelWorld.generate_collision = value
+
+@export_range(0, 10, 1) var collision_radius: int = 1:  # Only generate collision within N chunks of player (0=disable, 1=nearby only, 3=all visible chunks)
+	set(value):
+		collision_radius = value
+		if VoxelWorld:
+			VoxelWorld.collision_radius = value
 
 # Editor preview settings
 @export_range(1, 20, 1) var editor_preview_chunks: int = 1:  # How many chunks to show in editor (was max 5, now 20)
@@ -88,6 +94,7 @@ func _ready():
 		VoxelWorld.use_smooth_chunk_loading = use_smooth_chunk_loading
 		VoxelWorld.chunk_decode_time_budget_percent = chunk_decode_time_budget_percent
 		VoxelWorld.generate_collision = generate_collision
+		VoxelWorld.collision_radius = collision_radius
 
 	# Connect to VoxelWorld signals
 	if VoxelWorld:
@@ -183,6 +190,12 @@ func _process(_delta):
 			return  # Player not found yet
 		print("🎮 Player found! Starting chunk loading system...")
 
+		# Set initial player position in VoxelWorld (for distance-based collision)
+		var initial_chunk_pos = world_to_chunk(player.global_position)
+		if VoxelWorld:
+			VoxelWorld.player_chunk_position = initial_chunk_pos
+			print("   📍 Initial player chunk position: ", initial_chunk_pos)
+
 	# Get player's current chunk position
 	var player_chunk_pos = world_to_chunk(player.global_position)
 
@@ -192,6 +205,11 @@ func _process(_delta):
 		print("   Player world position: ", player.global_position)
 		print("   Active chunks: ", active_chunks.size())
 		last_player_chunk = player_chunk_pos
+
+		# Update VoxelWorld with player position (for distance-based collision)
+		if VoxelWorld:
+			VoxelWorld.player_chunk_position = player_chunk_pos
+
 		update_chunks_around_player(player_chunk_pos)
 
 func world_to_chunk(world_pos: Vector3) -> Vector3i:

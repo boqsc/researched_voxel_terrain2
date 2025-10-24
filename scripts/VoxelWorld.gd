@@ -18,7 +18,11 @@ var collision_queue: Array = []  # Array of {chunk_pos, mesh_data} for deferred 
 # Chunk decoding settings (CPU work for vertex unpacking)
 var use_smooth_chunk_loading: bool = true  # Spread vertex decoding over frames (smooth) or instant (stutter)
 @export_range(1, 100, 1) var chunk_decode_time_budget_percent: int = 10  # % of frame time budget for decoding (10% ≈ 1.6ms at 60fps)
-@export var generate_collision: bool = false  # Generate collision mesh (WARNING: ~200-300ms per chunk, causes stutters)
+@export var generate_collision: bool = false  # Generate collision mesh (WARNING: ~200ms per chunk, causes stutters)
+@export_range(0, 10, 1) var collision_radius: int = 1  # Only generate collision within N chunks of player (0=disable, 1=nearby only)
+
+# Player tracking (for distance-based collision)
+var player_chunk_position: Vector3i = Vector3i(0, 0, 0)
 
 # Incremental decoder (handles slow CPU decode work)
 var chunk_decoder: Node = null
@@ -448,13 +452,25 @@ func _on_chunk_decoded(chunk_pos: Vector3i, decoded_data: Dictionary):
 	# Spawn visual chunk immediately WITHOUT collision (to avoid stutter)
 	emit_signal("chunk_ready", chunk_pos, decoded_data, false)
 
-	# Queue collision generation if enabled (processed one per frame to avoid stutter)
+	# Queue collision generation if enabled AND chunk is within collision_radius of player
 	if decoded_data.enable_collision and generate_collision:
-		collision_queue.append({
-			"chunk_pos": chunk_pos,
-			"mesh_data": decoded_data
-		})
-		print("   ⏳ Collision queued for chunk ", chunk_pos, " (", collision_queue.size(), " in queue)")
+		var distance = _chunk_distance(chunk_pos, player_chunk_position)
+		if collision_radius == 0:
+			# Collision disabled globally
+			print("   ⏭️ Collision skipped for chunk ", chunk_pos, " (collision_radius=0)")
+		elif distance <= collision_radius:
+			collision_queue.append({
+				"chunk_pos": chunk_pos,
+				"mesh_data": decoded_data
+			})
+			print("   ⏳ Collision queued for chunk ", chunk_pos, " (distance=", int(distance), ", ", collision_queue.size(), " in queue)")
+		else:
+			print("   ⏭️ Collision skipped for chunk ", chunk_pos, " (distance=", int(distance), " > collision_radius=", collision_radius, ")")
+
+func _chunk_distance(a: Vector3i, b: Vector3i) -> float:
+	"""Calculate distance between two chunk positions"""
+	var diff = a - b
+	return sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z)
 
 func _generate_collision_for_chunk(chunk_pos: Vector3i, mesh_data: Dictionary):
 	"""Generate collision for a chunk (called one per frame from _process)"""
