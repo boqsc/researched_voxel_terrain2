@@ -1,0 +1,31 @@
+[gd_scene load_steps=4 format=3 uid="uid://test_player_gpu"]
+
+[ext_resource type="Script" path="res://scripts/GPUCharacterBody3D.gd" id="1"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
+radius = 0.5
+height = 2.0
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_1"]
+radius = 0.5
+height = 2.0
+
+[node name="TestPlayer" type="CharacterBody3D" groups=["player"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 50, 0)
+script = ExtResource("1")
+use_gpu_collision = true
+collision_radius = 0.5
+collision_height = 2.0
+move_speed = 5.0
+jump_velocity = 4.5
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CapsuleShape3D_1")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("CapsuleMesh_1")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+current = true
+fov = 75.0
