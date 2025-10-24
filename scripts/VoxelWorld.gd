@@ -13,9 +13,11 @@ var mesher_shader: RID
 # Chunk management
 var chunks: Dictionary = {}  # Vector3i -> ChunkData
 var generation_queue: Array = []  # Array of Vector3i positions to generate (GPU work)
-var decode_queue: Array = []  # Array of {chunk_pos, mesh_data} waiting to be decoded
 @export_range(1, 100, 1) var chunk_generation_cpu_percent: int = 10  # % of frame time budget for decoding (10% = 1.6ms/frame)
 @export var generate_collision: bool = false  # Generate collision during chunk loading (slower but safer)
+
+# Incremental decoder (handles slow CPU decode work)
+var chunk_decoder: Node = null
 
 # Chunk parameters (shared by all chunks)
 @export_range(8, 256, 8) var chunk_size: int = 80
@@ -48,6 +50,14 @@ func _ready():
 		push_error("Failed to load compute shaders")
 		return
 	print("✅ Shaders loaded successfully")
+
+	# Create ChunkDecoder for incremental decoding with time budget
+	var ChunkDecoderScript = load("res://scripts/ChunkDecoder.gd")
+	chunk_decoder = ChunkDecoderScript.new()
+	add_child(chunk_decoder)
+	chunk_decoder.time_budget_percent = chunk_generation_cpu_percent
+	chunk_decoder.chunk_decoded.connect(_on_chunk_decoded)
+	print("✅ ChunkDecoder initialized with ", chunk_generation_cpu_percent, "% time budget")
 
 	print("🎉 VoxelWorld ready - all chunks will share ONE RenderingDevice")
 
@@ -166,14 +176,16 @@ func _generate_chunk_async(chunk_pos: Vector3i):
 	var total_time = Time.get_ticks_msec() - start_time
 	print("✅ Chunk ", chunk_pos, " generated in ", total_time, "ms (Voxel=", voxel_gen_time, "ms, Mesh=", mesh_gen_time, "ms)")
 
-	# Mark chunk as generated
+	# Mark chunk as generated (GPU work complete)
 	chunks[chunk_pos] = {
 		"position": chunk_pos,
-		"generated_at": Time.get_ticks_msec()
+		"generated_at": Time.get_ticks_msec(),
+		"gpu_complete": true,
+		"decode_complete": false
 	}
 
-	# Emit signal so VoxelTerrain can create the visual chunk
-	emit_signal("chunk_ready", chunk_pos, mesh_data, generate_collision)
+	# Pass to ChunkDecoder for incremental decode (slow CPU work)
+	chunk_decoder.add_decode_job(chunk_pos, mesh_data, generate_collision)
 
 func _generate_voxel_data(chunk_pos: Vector3i) -> RID:
 	"""Generate voxel data for a chunk using GPU compute shader"""
@@ -420,3 +432,13 @@ func _exit_tree():
 		rd.free()
 		rd = null
 	print("🌍 VoxelWorld singleton cleaned up")
+func _on_chunk_decoded(chunk_pos: Vector3i, decoded_data: Dictionary):
+	"""Called by ChunkDecoder when chunk decode is complete"""
+	print("📦 Chunk ", chunk_pos, " decode complete, spawning...")
+
+	# Mark chunk as fully complete
+	if chunks.has(chunk_pos):
+		chunks[chunk_pos]["decode_complete"] = true
+
+	# Emit signal so VoxelTerrain can create the visual chunk
+	emit_signal("chunk_ready", chunk_pos, decoded_data, decoded_data.enable_collision)

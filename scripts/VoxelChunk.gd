@@ -36,51 +36,67 @@ func _ready():
 	name = "Chunk_%d_%d_%d" % [chunk_position.x, chunk_position.y, chunk_position.z]
 
 func apply_mesh_data(mesh_data: Dictionary, enable_collision: bool = true):
-	"""Apply mesh data received from VoxelWorld"""
+	"""Apply mesh data received from VoxelWorld (supports both raw and pre-decoded data)"""
 	if mesh_data.vertex_count == 0:
 		push_error("Chunk ", chunk_position, " received empty mesh data")
 		return
 
 	var decode_start = Time.get_ticks_msec()
 
-	var bytes_per_vertex = FLOATS_PER_VERTEX * BYTES_PER_FLOAT
+	var vertices: PackedVector3Array
+	var normals: PackedVector3Array
+	var uvs: PackedVector2Array
+	var indices: PackedInt32Array
 
-	# Create vertex arrays
-	var vertices = PackedVector3Array()
-	var normals = PackedVector3Array()
-	var uvs = PackedVector2Array()
+	# Check if data is pre-decoded (from ChunkDecoder) or raw GPU data
+	if mesh_data.has("vertices"):
+		# Pre-decoded data - just use it directly!
+		vertices = mesh_data.vertices
+		normals = mesh_data.normals
+		uvs = mesh_data.uvs
+		indices = mesh_data.indices
+		print("   🎨 Chunk ", chunk_position, " using pre-decoded data (incremental decode)")
+	else:
+		# Raw GPU data - decode it now (old path, fast single-frame decode)
+		var bytes_per_vertex = FLOATS_PER_VERTEX * BYTES_PER_FLOAT
 
-	vertices.resize(mesh_data.vertex_count)
-	normals.resize(mesh_data.vertex_count)
-	uvs.resize(mesh_data.vertex_count)
+		vertices = PackedVector3Array()
+		normals = PackedVector3Array()
+		uvs = PackedVector2Array()
 
-	# Decode vertex data
-	for i in range(mesh_data.vertex_count):
-		var offset = i * bytes_per_vertex
+		vertices.resize(mesh_data.vertex_count)
+		normals.resize(mesh_data.vertex_count)
+		uvs.resize(mesh_data.vertex_count)
 
-		# Position (3 floats)
-		var x = mesh_data.vertex_data.decode_float(offset)
-		var y = mesh_data.vertex_data.decode_float(offset + BYTES_PER_FLOAT)
-		var z = mesh_data.vertex_data.decode_float(offset + 2 * BYTES_PER_FLOAT)
-		vertices[i] = Vector3(x, y, z)
+		# Decode vertex data
+		for i in range(mesh_data.vertex_count):
+			var offset = i * bytes_per_vertex
 
-		# Normal (3 floats)
-		var nx = mesh_data.vertex_data.decode_float(offset + 3 * BYTES_PER_FLOAT)
-		var ny = mesh_data.vertex_data.decode_float(offset + 4 * BYTES_PER_FLOAT)
-		var nz = mesh_data.vertex_data.decode_float(offset + 5 * BYTES_PER_FLOAT)
-		normals[i] = Vector3(nx, ny, nz)
+			# Position (3 floats)
+			var x = mesh_data.vertex_data.decode_float(offset)
+			var y = mesh_data.vertex_data.decode_float(offset + BYTES_PER_FLOAT)
+			var z = mesh_data.vertex_data.decode_float(offset + 2 * BYTES_PER_FLOAT)
+			vertices[i] = Vector3(x, y, z)
 
-		# UV (2 floats)
-		var ux = mesh_data.vertex_data.decode_float(offset + 6 * BYTES_PER_FLOAT)
-		var uy = mesh_data.vertex_data.decode_float(offset + 7 * BYTES_PER_FLOAT)
-		uvs[i] = Vector2(ux, uy)
+			# Normal (3 floats)
+			var nx = mesh_data.vertex_data.decode_float(offset + 3 * BYTES_PER_FLOAT)
+			var ny = mesh_data.vertex_data.decode_float(offset + 4 * BYTES_PER_FLOAT)
+			var nz = mesh_data.vertex_data.decode_float(offset + 5 * BYTES_PER_FLOAT)
+			normals[i] = Vector3(nx, ny, nz)
 
-	# Create index array
-	var indices = PackedInt32Array()
-	indices.resize(mesh_data.index_count)
+			# UV (2 floats)
+			var ux = mesh_data.vertex_data.decode_float(offset + 6 * BYTES_PER_FLOAT)
+			var uy = mesh_data.vertex_data.decode_float(offset + 7 * BYTES_PER_FLOAT)
+			uvs[i] = Vector2(ux, uy)
 
-	for i in range(mesh_data.index_count):
-		indices[i] = mesh_data.index_data.decode_u32(i * 4)
+		# Create index array
+		indices = PackedInt32Array()
+		indices.resize(mesh_data.index_count)
+
+		for i in range(mesh_data.index_count):
+			indices[i] = mesh_data.index_data.decode_u32(i * 4)
+
+		print("   🎨 Chunk ", chunk_position, " decoded in single frame (old path)")
 
 	# Create mesh
 	var arrays = []
