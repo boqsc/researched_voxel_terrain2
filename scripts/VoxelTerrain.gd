@@ -89,10 +89,11 @@ func _ready():
 		VoxelWorld.chunk_decode_time_budget_percent = chunk_decode_time_budget_percent
 		VoxelWorld.generate_collision = generate_collision
 
-	# Connect to VoxelWorld chunk_ready signal
+	# Connect to VoxelWorld signals
 	if VoxelWorld:
 		VoxelWorld.chunk_ready.connect(_on_chunk_ready)
-		print("✅ Connected to VoxelWorld.chunk_ready signal")
+		VoxelWorld.collision_ready.connect(_on_collision_ready)
+		print("✅ Connected to VoxelWorld signals (chunk_ready, collision_ready)")
 	else:
 		push_error("VoxelWorld singleton not found! Is it registered as autoload?")
 
@@ -289,6 +290,16 @@ func _unload_chunk(chunk_pos: Vector3i):
 	# Tell VoxelWorld to unload
 	if VoxelWorld:
 		VoxelWorld.unload_chunk(chunk_pos)
+
+func _on_collision_ready(chunk_pos: Vector3i, mesh_data: Dictionary):
+	"""Called when VoxelWorld has generated collision for a chunk"""
+	# Find the chunk and add collision
+	if not active_chunks.has(chunk_pos):
+		print("⚠️ Collision ready for chunk ", chunk_pos, " but chunk not found")
+		return
+
+	var chunk = active_chunks[chunk_pos]
+	chunk.add_collision(mesh_data)
 
 func _exit_tree():
 	# Cleanup all chunks

@@ -13,6 +13,7 @@ var mesher_shader: RID
 # Chunk management
 var chunks: Dictionary = {}  # Vector3i -> ChunkData
 var generation_queue: Array = []  # Array of Vector3i positions to generate (GPU work)
+var collision_queue: Array = []  # Array of {chunk_pos, mesh_data} for deferred collision (CPU work)
 
 # Chunk decoding settings (CPU work for vertex unpacking)
 var use_smooth_chunk_loading: bool = true  # Spread vertex decoding over frames (smooth) or instant (stutter)
@@ -37,6 +38,7 @@ const INDICES_PER_CUBE = 36   # 6 faces * 6 indices
 
 # Signals
 signal chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary, enable_collision: bool)
+signal collision_ready(chunk_pos: Vector3i, mesh_data: Dictionary)
 
 func _ready():
 	print("🌍 VoxelWorld singleton initializing...")
@@ -65,20 +67,20 @@ func _ready():
 	print("🎉 VoxelWorld ready - all chunks will share ONE RenderingDevice")
 
 func _process(_delta):
-	# For now: Keep it simple - generate one chunk per frame if queue not empty
-	# TODO: Implement proper time budget system for 60 FPS during generation
-	# This requires splitting the 600ms decode across many frames
+	# Process generation queue (one chunk per frame)
+	if generation_queue.size() > 0:
+		var chunk_pos = generation_queue.pop_front()
+		_generate_chunk_async(chunk_pos)
 
-	if generation_queue.size() == 0:
-		return
+		# Status update
+		if generation_queue.size() > 0 and generation_queue.size() % 10 == 0:
+			print("📊 ", generation_queue.size(), " chunks remaining in generation queue")
 
-	# Generate one chunk (GPU + full decode)
-	var chunk_pos = generation_queue.pop_front()
-	_generate_chunk_async(chunk_pos)
-
-	# Status update
-	if generation_queue.size() > 0 and generation_queue.size() % 10 == 0:
-		print("📊 ", generation_queue.size(), " chunks remaining")
+	# Process collision queue (one collision per frame to avoid stutter)
+	# This spreads the 389ms collision generation across frames
+	if collision_queue.size() > 0 and generate_collision:
+		var collision_job = collision_queue.pop_front()
+		_generate_collision_for_chunk(collision_job.chunk_pos, collision_job.mesh_data)
 
 func load_shaders() -> bool:
 	# Load voxel generator shader
@@ -443,5 +445,23 @@ func _on_chunk_decoded(chunk_pos: Vector3i, decoded_data: Dictionary):
 	if chunks.has(chunk_pos):
 		chunks[chunk_pos]["decode_complete"] = true
 
-	# Emit signal so VoxelTerrain can create the visual chunk
-	emit_signal("chunk_ready", chunk_pos, decoded_data, decoded_data.enable_collision)
+	# Spawn visual chunk immediately WITHOUT collision (to avoid stutter)
+	emit_signal("chunk_ready", chunk_pos, decoded_data, false)
+
+	# Queue collision generation if enabled (processed one per frame to avoid stutter)
+	if decoded_data.enable_collision and generate_collision:
+		collision_queue.append({
+			"chunk_pos": chunk_pos,
+			"mesh_data": decoded_data
+		})
+		print("   ⏳ Collision queued for chunk ", chunk_pos, " (", collision_queue.size(), " in queue)")
+
+func _generate_collision_for_chunk(chunk_pos: Vector3i, mesh_data: Dictionary):
+	"""Generate collision for a chunk (called one per frame from _process)"""
+	var collision_start = Time.get_ticks_msec()
+
+	# Emit signal to add collision to existing chunk
+	emit_signal("collision_ready", chunk_pos, mesh_data)
+
+	var collision_time = Time.get_ticks_msec() - collision_start
+	print("   🔷 Collision generated for chunk ", chunk_pos, " in ", collision_time, "ms (", collision_queue.size(), " remaining)")

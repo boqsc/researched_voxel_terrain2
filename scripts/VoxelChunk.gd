@@ -120,21 +120,23 @@ func apply_mesh_data(mesh_data: Dictionary, enable_collision: bool = true):
 	# Apply to mesh instance
 	mesh_instance.mesh = mesh
 
-	# Create collision (optional - disabled by default for smooth gameplay)
-	var collision_time = 0
-	if enable_collision:
-		var collision_start = Time.get_ticks_msec()
-		mesh_instance.create_trimesh_collision()
-		collision_time = Time.get_ticks_msec() - collision_start
-
 	var decode_time = Time.get_ticks_msec() - decode_start
 
 	state = ChunkState.READY
 
-	if enable_collision:
-		print("   🎨 Chunk ", chunk_position, " mesh applied in ", decode_time, "ms (collision: ", collision_time, "ms)")
-	else:
-		print("   🎨 Chunk ", chunk_position, " mesh applied in ", decode_time, "ms (no collision)")
+	print("   🎨 Chunk ", chunk_position, " mesh applied in ", decode_time, "ms (collision deferred)")
+
+func add_collision(mesh_data: Dictionary):
+	"""Add collision to an existing chunk (called after mesh is created to avoid stutter)"""
+	if not mesh_instance or not mesh_instance.mesh:
+		push_error("Cannot add collision to chunk ", chunk_position, " - no mesh exists")
+		return
+
+	var collision_start = Time.get_ticks_msec()
+	mesh_instance.create_trimesh_collision()
+	var collision_time = Time.get_ticks_msec() - collision_start
+
+	print("   🔷 Chunk ", chunk_position, " collision added in ", collision_time, "ms")
 
 func cleanup():
 	"""Cleanup chunk resources"""
