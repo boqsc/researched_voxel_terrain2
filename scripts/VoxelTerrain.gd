@@ -5,17 +5,25 @@ extends Node3D
 # Does NOT do GPU work - that's handled by VoxelWorld singleton
 
 # Chunk loading settings
-@export_range(1, 50, 1) var chunk_load_radius: int = 3  # Load chunks within N chunks of player (was max 10, now 50)
+@export_range(1, 50, 1) var chunk_load_radius: int = 3  # Load chunks within N chunks of player
 @export var auto_load_chunks: bool = true  # Automatically load chunks around player
+@export_range(1, 5, 1) var vertical_chunk_layers: int = 3  # Number of vertical chunk layers to load (centered on player)
+@export_range(0, 10, 1) var chunk_unload_hysteresis: int = 1  # Extra chunks beyond load_radius before unloading (prevents thrashing)
 
-# Chunk generation throttling (exposed from VoxelWorld for easy access)
-@export_range(1, 100, 1) var chunk_generation_cpu_percent: int = 10:  # % of frames to dedicate to chunk generation
+# Chunk decoding settings (controls CPU work for vertex unpacking)
+@export var use_smooth_chunk_loading: bool = true:  # Spread vertex decoding over frames (true=smooth) or load instantly (false=stutter)
 	set(value):
-		chunk_generation_cpu_percent = value
+		use_smooth_chunk_loading = value
 		if VoxelWorld:
-			VoxelWorld.chunk_generation_cpu_percent = value
+			VoxelWorld.use_smooth_chunk_loading = value
 
-@export var generate_collision: bool = false:  # Generate collision during chunk loading (slower but walkable)
+@export_range(1, 100, 1) var chunk_decode_time_budget_percent: int = 10:  # % of frame time for vertex decoding (10% ≈ 1.6ms at 60fps)
+	set(value):
+		chunk_decode_time_budget_percent = value
+		if VoxelWorld:
+			VoxelWorld.chunk_decode_time_budget_percent = value
+
+@export var generate_collision: bool = false:  # Generate collision mesh (WARNING: ~200-300ms per chunk on CPU, causes stutters)
 	set(value):
 		generate_collision = value
 		if VoxelWorld:
@@ -77,7 +85,8 @@ func _ready():
 		VoxelWorld.noise_scale = noise_scale
 		VoxelWorld.height_scale = height_scale
 		VoxelWorld.visibility_ratio = visibility_ratio
-		VoxelWorld.chunk_generation_cpu_percent = chunk_generation_cpu_percent
+		VoxelWorld.use_smooth_chunk_loading = use_smooth_chunk_loading
+		VoxelWorld.chunk_decode_time_budget_percent = chunk_decode_time_budget_percent
 		VoxelWorld.generate_collision = generate_collision
 
 	# Connect to VoxelWorld chunk_ready signal
@@ -200,9 +209,13 @@ func update_chunks_around_player(center: Vector3i):
 	"""Load chunks in radius around player, unload distant chunks"""
 	# Load chunks in radius
 	var chunks_to_load = []
+	var y_half = floori(vertical_chunk_layers / 2.0)
+	var y_range_start = -y_half
+	var y_range_end = y_half + (vertical_chunk_layers % 2)  # Add 1 if odd number
+
 	for x in range(-chunk_load_radius, chunk_load_radius + 1):
 		for z in range(-chunk_load_radius, chunk_load_radius + 1):
-			for y in range(-1, 2):  # Load 3 vertical layers (below, at, above player)
+			for y in range(y_range_start, y_range_end):  # Use configurable vertical layers
 				var chunk_pos = center + Vector3i(x, y, z)
 
 				# Skip if already active
@@ -220,7 +233,7 @@ func update_chunks_around_player(center: Vector3i):
 	var chunks_to_unload = []
 	for chunk_pos in active_chunks.keys():
 		var distance = _chunk_distance(chunk_pos, center)
-		if distance > chunk_load_radius + 1:  # +1 for hysteresis
+		if distance > chunk_load_radius + chunk_unload_hysteresis:  # Use configurable hysteresis
 			chunks_to_unload.append(chunk_pos)
 
 	if chunks_to_unload.size() > 0:

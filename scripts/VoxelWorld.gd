@@ -13,8 +13,11 @@ var mesher_shader: RID
 # Chunk management
 var chunks: Dictionary = {}  # Vector3i -> ChunkData
 var generation_queue: Array = []  # Array of Vector3i positions to generate (GPU work)
-@export_range(1, 100, 1) var chunk_generation_cpu_percent: int = 10  # % of frame time budget for decoding (10% = 1.6ms/frame)
-@export var generate_collision: bool = false  # Generate collision during chunk loading (slower but safer)
+
+# Chunk decoding settings (CPU work for vertex unpacking)
+var use_smooth_chunk_loading: bool = true  # Spread vertex decoding over frames (smooth) or instant (stutter)
+@export_range(1, 100, 1) var chunk_decode_time_budget_percent: int = 10  # % of frame time budget for decoding (10% ≈ 1.6ms at 60fps)
+@export var generate_collision: bool = false  # Generate collision mesh (WARNING: ~200-300ms per chunk, causes stutters)
 
 # Incremental decoder (handles slow CPU decode work)
 var chunk_decoder: Node = null
@@ -55,9 +58,9 @@ func _ready():
 	var ChunkDecoderScript = load("res://scripts/ChunkDecoder.gd")
 	chunk_decoder = ChunkDecoderScript.new()
 	add_child(chunk_decoder)
-	chunk_decoder.time_budget_percent = chunk_generation_cpu_percent
+	chunk_decoder.time_budget_percent = chunk_decode_time_budget_percent
 	chunk_decoder.chunk_decoded.connect(_on_chunk_decoded)
-	print("✅ ChunkDecoder initialized with ", chunk_generation_cpu_percent, "% time budget")
+	print("✅ ChunkDecoder initialized with ", chunk_decode_time_budget_percent, "% time budget")
 
 	print("🎉 VoxelWorld ready - all chunks will share ONE RenderingDevice")
 
