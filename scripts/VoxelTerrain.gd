@@ -123,7 +123,7 @@ func _do_editor_update():
 
 func _generate_editor_preview():
 	"""Generate chunks for editor preview based on editor_preview_chunks setting"""
-	var half_size = int(editor_preview_chunks / 2)
+	var half_size = floori(editor_preview_chunks / 2.0)  # Fix integer division warning
 	var chunk_count = 0
 
 	print("   📋 Generating ", editor_preview_chunks, "x", editor_preview_chunks, " chunk grid for editor preview")
@@ -156,12 +156,16 @@ func _process(_delta):
 		player = get_tree().get_first_node_in_group("player")
 		if not player:
 			return  # Player not found yet
+		print("🎮 Player found! Starting chunk loading system...")
 
 	# Get player's current chunk position
 	var player_chunk_pos = world_to_chunk(player.global_position)
 
 	# Only update if player moved to a different chunk
 	if player_chunk_pos != last_player_chunk:
+		print("📍 Player moved to chunk ", player_chunk_pos, " (from ", last_player_chunk, ")")
+		print("   Player world position: ", player.global_position)
+		print("   Active chunks: ", active_chunks.size())
 		last_player_chunk = player_chunk_pos
 		update_chunks_around_player(player_chunk_pos)
 
