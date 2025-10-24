@@ -14,6 +14,7 @@ var mesher_shader: RID
 var chunks: Dictionary = {}  # Vector3i -> ChunkData
 var generation_queue: Array = []  # Array of Vector3i positions to generate
 @export_range(1, 100, 1) var chunk_generation_cpu_percent: int = 10  # % of frames to dedicate to chunk generation
+@export var generate_collision: bool = false  # Generate collision during chunk loading (slower but safer)
 var _frame_counter: int = 0  # Used to throttle chunk generation based on CPU percentage
 
 # Chunk parameters (shared by all chunks)
@@ -30,7 +31,7 @@ const VERTICES_PER_CUBE = 24  # 6 faces * 4 vertices
 const INDICES_PER_CUBE = 36   # 6 faces * 6 indices
 
 # Signals
-signal chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary)
+signal chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary, enable_collision: bool)
 
 func _ready():
 	print("🌍 VoxelWorld singleton initializing...")
@@ -180,7 +181,7 @@ func _generate_chunk_async(chunk_pos: Vector3i):
 	}
 
 	# Emit signal so VoxelTerrain can create the visual chunk
-	emit_signal("chunk_ready", chunk_pos, mesh_data)
+	emit_signal("chunk_ready", chunk_pos, mesh_data, generate_collision)
 
 func _generate_voxel_data(chunk_pos: Vector3i) -> RID:
 	"""Generate voxel data for a chunk using GPU compute shader"""

@@ -218,7 +218,7 @@ func _chunk_distance(a: Vector3i, b: Vector3i) -> float:
 	var diff = a - b
 	return sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z)
 
-func _on_chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary):
+func _on_chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary, enable_collision: bool):
 	"""Called when VoxelWorld has generated a chunk"""
 	# Skip if chunk already exists
 	if active_chunks.has(chunk_pos):
@@ -239,8 +239,8 @@ func _on_chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary):
 	var chunk_world_size = _chunk_size * _voxel_size
 	chunk.global_position = Vector3(chunk_pos) * chunk_world_size
 
-	# Apply mesh data
-	chunk.apply_mesh_data(mesh_data)
+	# Apply mesh data with collision setting
+	chunk.apply_mesh_data(mesh_data, enable_collision)
 
 	# Track active chunk
 	active_chunks[chunk_pos] = chunk

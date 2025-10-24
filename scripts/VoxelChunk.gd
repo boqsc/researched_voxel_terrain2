@@ -35,7 +35,7 @@ func _ready():
 	# This will be set when mesh data is applied
 	name = "Chunk_%d_%d_%d" % [chunk_position.x, chunk_position.y, chunk_position.z]
 
-func apply_mesh_data(mesh_data: Dictionary):
+func apply_mesh_data(mesh_data: Dictionary, enable_collision: bool = true):
 	"""Apply mesh data received from VoxelWorld"""
 	if mesh_data.vertex_count == 0:
 		push_error("Chunk ", chunk_position, " received empty mesh data")
@@ -104,16 +104,21 @@ func apply_mesh_data(mesh_data: Dictionary):
 	# Apply to mesh instance
 	mesh_instance.mesh = mesh
 
-	# Create collision (trimesh for now - will optimize later)
-	var collision_start = Time.get_ticks_msec()
-	mesh_instance.create_trimesh_collision()
-	var collision_time = Time.get_ticks_msec() - collision_start
+	# Create collision (optional - disabled by default for smooth gameplay)
+	var collision_time = 0
+	if enable_collision:
+		var collision_start = Time.get_ticks_msec()
+		mesh_instance.create_trimesh_collision()
+		collision_time = Time.get_ticks_msec() - collision_start
 
 	var decode_time = Time.get_ticks_msec() - decode_start
 
 	state = ChunkState.READY
 
-	print("   🎨 Chunk ", chunk_position, " mesh applied in ", decode_time, "ms (collision: ", collision_time, "ms)")
+	if enable_collision:
+		print("   🎨 Chunk ", chunk_position, " mesh applied in ", decode_time, "ms (collision: ", collision_time, "ms)")
+	else:
+		print("   🎨 Chunk ", chunk_position, " mesh applied in ", decode_time, "ms (no collision)")
 
 func cleanup():
 	"""Cleanup chunk resources"""
