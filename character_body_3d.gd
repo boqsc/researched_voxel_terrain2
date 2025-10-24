@@ -11,6 +11,9 @@ extends CharacterBody3D
 var voxel_terrain: Node3D
 
 func _ready():
+	# Add to "player" group so terrain system can find us
+	add_to_group("player")
+
 	# Find the voxel terrain in the scene
 	voxel_terrain = get_tree().get_first_node_in_group("voxel_terrain")
 	if not voxel_terrain:
