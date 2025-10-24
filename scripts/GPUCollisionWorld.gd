@@ -118,6 +118,12 @@ func _rebuild_collision_buffer():
 
 	# SPARSE: Only allocate space for loaded chunks
 	var num_chunks = chunk_voxel_data.size()
+
+	# No chunks loaded yet - skip buffer creation
+	if num_chunks == 0:
+		print("   ⏸️ No chunks loaded yet, skipping collision buffer creation")
+		return
+
 	var voxels_per_chunk = chunk_size * chunk_size * chunk_size
 	var total_voxels = num_chunks * voxels_per_chunk
 	var buffer_size = total_voxels * 4  # 4 bytes per float
