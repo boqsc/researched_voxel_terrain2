@@ -124,7 +124,7 @@ func apply_mesh_data(mesh_data: Dictionary, enable_collision: bool = true):
 	var collision_time = 0
 	if enable_collision:
 		var collision_start = Time.get_ticks_msec()
-		mesh_instance.create_trimesh_collision()
+		_create_simplified_collision(vertices, indices)
 		collision_time = Time.get_ticks_msec() - collision_start
 
 	var decode_time = Time.get_ticks_msec() - decode_start
@@ -135,6 +135,63 @@ func apply_mesh_data(mesh_data: Dictionary, enable_collision: bool = true):
 		print("   🎨 Chunk ", chunk_position, " mesh applied in ", decode_time, "ms (collision: ", collision_time, "ms)")
 	else:
 		print("   🎨 Chunk ", chunk_position, " mesh applied in ", decode_time, "ms (no collision)")
+
+func _create_simplified_collision(vertices: PackedVector3Array, indices: PackedInt32Array):
+	"""Create collision using simplified mesh (every Nth triangle) for better performance"""
+	# Configuration: Use every Nth triangle (higher = faster but less accurate)
+	# N=1: All triangles (slow, most accurate)
+	# N=4: Every 4th triangle (4x faster, good enough for voxel terrain)
+	# N=8: Every 8th triangle (8x faster, still reasonable)
+	const TRIANGLE_SKIP = 4
+
+	# Build simplified collision arrays (every Nth triangle)
+	var collision_indices = PackedInt32Array()
+	var triangle_count = indices.size() / 3
+
+	# Map from old vertex indices to new collision vertex indices
+	var vertex_map = {}  # old_index -> new_index
+	var collision_vertices = PackedVector3Array()
+	var next_vertex_index = 0
+
+	# Process every Nth triangle
+	for tri_idx in range(0, triangle_count, TRIANGLE_SKIP):
+		var base_idx = tri_idx * 3
+
+		# Get the 3 vertex indices for this triangle
+		for i in range(3):
+			var old_idx = indices[base_idx + i]
+
+			# Add vertex if not already in collision mesh
+			if not vertex_map.has(old_idx):
+				collision_vertices.append(vertices[old_idx])
+				vertex_map[old_idx] = next_vertex_index
+				next_vertex_index += 1
+
+			# Add mapped index to collision indices
+			collision_indices.append(vertex_map[old_idx])
+
+	# Create collision shape manually
+	var shape = ConcavePolygonShape3D.new()
+
+	# Convert to face array format (flat array of Vector3s, 3 per triangle)
+	var faces = PackedVector3Array()
+	for i in range(0, collision_indices.size(), 3):
+		faces.append(collision_vertices[collision_indices[i]])
+		faces.append(collision_vertices[collision_indices[i + 1]])
+		faces.append(collision_vertices[collision_indices[i + 2]])
+
+	shape.set_faces(faces)
+
+	# Create static body and collision shape
+	var static_body = StaticBody3D.new()
+	var collision_shape = CollisionShape3D.new()
+	collision_shape.shape = shape
+
+	static_body.add_child(collision_shape)
+	mesh_instance.add_child(static_body)
+
+	var reduction = 100.0 * (1.0 - float(collision_indices.size()) / float(indices.size()))
+	print("   🛡️ Collision: ", collision_vertices.size(), " vertices (", int(reduction), "% reduction)")
 
 func cleanup():
 	"""Cleanup chunk resources"""
