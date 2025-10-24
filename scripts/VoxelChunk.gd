@@ -141,8 +141,9 @@ func _create_simplified_collision(vertices: PackedVector3Array, indices: PackedI
 	# Configuration: Use every Nth triangle (higher = faster but less accurate)
 	# N=1: All triangles (slow, most accurate)
 	# N=4: Every 4th triangle (4x faster, good enough for voxel terrain)
-	# N=8: Every 8th triangle (8x faster, still reasonable)
-	const TRIANGLE_SKIP = 4
+	# N=8: Every 8th triangle (8x faster, still reasonable) ← Recommended
+	# N=16: Every 16th triangle (16x faster, nearly imperceptible stutter)
+	const TRIANGLE_SKIP = 8  # Changed from 4 to 8 for even smoother gameplay
 
 	# Build simplified collision arrays (every Nth triangle)
 	var collision_indices = PackedInt32Array()
