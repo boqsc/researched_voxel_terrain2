@@ -103,9 +103,9 @@ func _process(_delta):
 
 func world_to_chunk(world_pos: Vector3) -> Vector3i:
 	"""Convert world position to chunk position"""
-	var chunk_size = VoxelWorld.chunk_size if VoxelWorld else 80
-	var voxel_size = VoxelWorld.voxel_size if VoxelWorld else 1.0
-	var chunk_world_size = chunk_size * voxel_size
+	var _chunk_size = VoxelWorld.chunk_size if VoxelWorld else 80
+	var _voxel_size = VoxelWorld.voxel_size if VoxelWorld else 1.0
+	var chunk_world_size = _chunk_size * _voxel_size
 
 	return Vector3i(
 		floori(world_pos.x / chunk_world_size),
@@ -167,14 +167,14 @@ func _on_chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary):
 	# Create chunk instance
 	var chunk = preload("res://scripts/VoxelChunk.gd").new(chunk_pos)
 
-	# Position chunk in world
-	var chunk_size = VoxelWorld.chunk_size if VoxelWorld else 80
-	var voxel_size = VoxelWorld.voxel_size if VoxelWorld else 1.0
-	var chunk_world_size = chunk_size * voxel_size
-	chunk.global_position = Vector3(chunk_pos) * chunk_world_size
-
-	# Add to scene
+	# Add to scene FIRST (required before setting global_position)
 	add_child(chunk)
+
+	# Position chunk in world (after adding to tree)
+	var _chunk_size = VoxelWorld.chunk_size if VoxelWorld else 80
+	var _voxel_size = VoxelWorld.voxel_size if VoxelWorld else 1.0
+	var chunk_world_size = _chunk_size * _voxel_size
+	chunk.global_position = Vector3(chunk_pos) * chunk_world_size
 
 	# Apply mesh data
 	chunk.apply_mesh_data(mesh_data)
