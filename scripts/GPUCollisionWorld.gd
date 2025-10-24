@@ -254,36 +254,36 @@ func _execute_queries(query_data: PackedFloat32Array, query_count: int) -> Array
 		push_error("Voxel collision buffer not initialized!")
 		return []
 
-	# Create uniform set
+	# Create uniform set (must use RDUniform objects in Godot 4, not dictionaries)
 	var uniforms = []
 
 	# Binding 0: Voxel collision data (use actual buffer!)
-	uniforms.append({
-		"binding": 0,
-		"uniform_type": RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER,
-		"ids": [voxel_collision_buffer]
-	})
+	var uniform0 = RDUniform.new()
+	uniform0.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uniform0.binding = 0
+	uniform0.add_id(voxel_collision_buffer)
+	uniforms.append(uniform0)
 
 	# Binding 1: Query buffer
-	uniforms.append({
-		"binding": 1,
-		"uniform_type": RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER,
-		"ids": [query_buf]
-	})
+	var uniform1 = RDUniform.new()
+	uniform1.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uniform1.binding = 1
+	uniform1.add_id(query_buf)
+	uniforms.append(uniform1)
 
 	# Binding 2: Result buffer
-	uniforms.append({
-		"binding": 2,
-		"uniform_type": RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER,
-		"ids": [result_buf]
-	})
+	var uniform2 = RDUniform.new()
+	uniform2.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uniform2.binding = 2
+	uniform2.add_id(result_buf)
+	uniforms.append(uniform2)
 
 	# Binding 3: Params buffer
-	uniforms.append({
-		"binding": 3,
-		"uniform_type": RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER,
-		"ids": [params_buf]
-	})
+	var uniform3 = RDUniform.new()
+	uniform3.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	uniform3.binding = 3
+	uniform3.add_id(params_buf)
+	uniforms.append(uniform3)
 
 	var uniform_set = rd.uniform_set_create(uniforms, collision_shader, 0)
 
