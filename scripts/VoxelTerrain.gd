@@ -8,6 +8,19 @@ extends Node3D
 @export_range(1, 50, 1) var chunk_load_radius: int = 3  # Load chunks within N chunks of player (was max 10, now 50)
 @export var auto_load_chunks: bool = true  # Automatically load chunks around player
 
+# Chunk generation throttling (exposed from VoxelWorld for easy access)
+@export_range(1, 100, 1) var chunk_generation_cpu_percent: int = 10:  # % of frames to dedicate to chunk generation
+	set(value):
+		chunk_generation_cpu_percent = value
+		if VoxelWorld:
+			VoxelWorld.chunk_generation_cpu_percent = value
+
+@export var generate_collision: bool = false:  # Generate collision during chunk loading (slower but walkable)
+	set(value):
+		generate_collision = value
+		if VoxelWorld:
+			VoxelWorld.generate_collision = value
+
 # Editor preview settings
 @export_range(1, 20, 1) var editor_preview_chunks: int = 1:  # How many chunks to show in editor (was max 5, now 20)
 	set(value):
@@ -64,6 +77,8 @@ func _ready():
 		VoxelWorld.noise_scale = noise_scale
 		VoxelWorld.height_scale = height_scale
 		VoxelWorld.visibility_ratio = visibility_ratio
+		VoxelWorld.chunk_generation_cpu_percent = chunk_generation_cpu_percent
+		VoxelWorld.generate_collision = generate_collision
 
 	# Connect to VoxelWorld chunk_ready signal
 	if VoxelWorld:
