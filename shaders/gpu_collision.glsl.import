@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://b0xtbvbo7vdll"
+path="res://.godot/imported/gpu_collision.glsl-1b84a00e57b6307baa4ffbfe13be2a33.res"
+
+[deps]
+
+source_file="res://shaders/gpu_collision.glsl"
+dest_files=["res://.godot/imported/gpu_collision.glsl-1b84a00e57b6307baa4ffbfe13be2a33.res"]
+
+[params]
+
