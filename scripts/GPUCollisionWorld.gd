@@ -304,19 +304,19 @@ func _execute_queries(query_data: PackedFloat32Array, query_count: int) -> Array
 	# Parse results
 	var results = []
 	for i in range(query_count):
-		var offset = i * 8 * 4  # 8 floats * 4 bytes
-		var hit = result_bytes.decode_float(offset) > 0.5
+		var result_offset = i * 8 * 4  # 8 floats * 4 bytes
+		var hit = result_bytes.decode_float(result_offset) > 0.5
 		var position = Vector3(
-			result_bytes.decode_float(offset + 4),
-			result_bytes.decode_float(offset + 8),
-			result_bytes.decode_float(offset + 12)
+			result_bytes.decode_float(result_offset + 4),
+			result_bytes.decode_float(result_offset + 8),
+			result_bytes.decode_float(result_offset + 12)
 		)
 		var normal = Vector3(
-			result_bytes.decode_float(offset + 16),
-			result_bytes.decode_float(offset + 20),
-			result_bytes.decode_float(offset + 24)
+			result_bytes.decode_float(result_offset + 16),
+			result_bytes.decode_float(result_offset + 20),
+			result_bytes.decode_float(result_offset + 24)
 		)
-		var distance = result_bytes.decode_float(offset + 28)
+		var distance = result_bytes.decode_float(result_offset + 28)
 
 		results.append({
 			"hit": hit,
