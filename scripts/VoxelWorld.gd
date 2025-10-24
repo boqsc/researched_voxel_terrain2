@@ -138,6 +138,10 @@ func unload_chunk(chunk_pos: Vector3i):
 	if not chunks.has(chunk_pos):
 		return
 
+	# Remove collision data
+	if has_node("/root/GPUCollisionWorld"):
+		get_node("/root/GPUCollisionWorld").remove_chunk_data(chunk_pos)
+
 	# Remove from chunks dictionary
 	chunks.erase(chunk_pos)
 	print("🗑️ Chunk ", chunk_pos, " unloaded")
@@ -155,6 +159,13 @@ func _generate_chunk_async(chunk_pos: Vector3i):
 		push_error("Failed to generate voxel data for chunk ", chunk_pos)
 		return
 	var voxel_gen_time = Time.get_ticks_msec() - voxel_gen_start
+
+	# Step 1.5: Read voxel density data for GPU collision
+	var voxel_density_data: PackedFloat32Array
+	if has_node("/root/GPUCollisionWorld"):
+		voxel_density_data = rd.buffer_get_data(voxel_data_buffer).to_float32_array()
+		# Pass to GPU collision system
+		get_node("/root/GPUCollisionWorld").update_voxel_data(chunk_pos, voxel_density_data)
 
 	# Step 2: Generate mesh from voxel data
 	var mesh_gen_start = Time.get_ticks_msec()
