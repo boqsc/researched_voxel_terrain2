@@ -29,11 +29,11 @@ layout(set = 0, binding = 2, std430) restrict buffer writeonly CollisionResults 
 // Parameters
 layout(set = 0, binding = 3, std430) restrict buffer readonly CollisionParams {
     uint query_count;
-    uint world_size_x;    // Number of chunks in X
-    uint world_size_y;    // Number of chunks in Y
-    uint world_size_z;    // Number of chunks in Z
+    uint num_chunks;      // Number of loaded chunks (SPARSE)
     uint chunk_size;      // Voxels per chunk axis
     float voxel_size;     // Size of each voxel
+    // Followed by chunk metadata: [chunk_pos_x, chunk_pos_y, chunk_pos_z, buffer_offset] * num_chunks
+    int chunk_data[];     // [x, y, z, offset, x, y, z, offset, ...]
 } params;
 
 // Query types
@@ -41,7 +41,7 @@ const uint QUERY_RAYCAST = 0;
 const uint QUERY_SPHERE_CAST = 1;
 const uint QUERY_BOX_CAST = 2;
 
-// Get voxel density at world position
+// Get voxel density at world position (SPARSE buffer lookup)
 float get_voxel_density(vec3 world_pos) {
     // Convert world position to voxel grid coordinates
     ivec3 voxel_pos = ivec3(floor(world_pos / params.voxel_size));
@@ -51,33 +51,36 @@ float get_voxel_density(vec3 world_pos) {
     ivec3 chunk_coord = voxel_pos / chunk_size_int;
     ivec3 local_voxel = voxel_pos - (chunk_coord * chunk_size_int);
 
-    // Bounds check
-    if (chunk_coord.x < 0 || chunk_coord.x >= int(params.world_size_x) ||
-        chunk_coord.y < 0 || chunk_coord.y >= int(params.world_size_y) ||
-        chunk_coord.z < 0 || chunk_coord.z >= int(params.world_size_z)) {
-        return -1.0; // Outside world bounds = empty
-    }
-
+    // Bounds check local voxel
     if (local_voxel.x < 0 || local_voxel.x >= chunk_size_int ||
         local_voxel.y < 0 || local_voxel.y >= chunk_size_int ||
         local_voxel.z < 0 || local_voxel.z >= chunk_size_int) {
         return -1.0;
     }
 
-    // Calculate flat index into density buffer
-    uint world_stride_x = params.chunk_size;
-    uint world_stride_y = params.chunk_size * params.world_size_x * params.chunk_size;
-    uint world_stride_z = params.chunk_size * params.world_size_x * params.chunk_size * params.world_size_y * params.chunk_size;
+    // SPARSE: Search for chunk in loaded chunks list
+    int chunk_buffer_offset = -1;
+    for (uint i = 0; i < params.num_chunks; i++) {
+        uint base = i * 4; // Each chunk entry: x, y, z, offset
+        if (params.chunk_data[base + 0] == chunk_coord.x &&
+            params.chunk_data[base + 1] == chunk_coord.y &&
+            params.chunk_data[base + 2] == chunk_coord.z) {
+            chunk_buffer_offset = params.chunk_data[base + 3];
+            break;
+        }
+    }
 
-    uint chunk_offset = uint(chunk_coord.x) * world_stride_x +
-                       uint(chunk_coord.y) * world_stride_y +
-                       uint(chunk_coord.z) * world_stride_z;
+    // Chunk not loaded
+    if (chunk_buffer_offset < 0) {
+        return -1.0;
+    }
 
+    // Calculate voxel offset within chunk
     uint voxel_offset = uint(local_voxel.x) +
                        uint(local_voxel.y) * params.chunk_size +
                        uint(local_voxel.z) * params.chunk_size * params.chunk_size;
 
-    uint index = chunk_offset + voxel_offset;
+    uint index = uint(chunk_buffer_offset) + voxel_offset;
 
     // Bounds check on buffer
     if (index >= voxel_collision.density.length()) {

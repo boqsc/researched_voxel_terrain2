@@ -16,9 +16,9 @@ var query_buffer: RID
 var result_buffer: RID
 var params_buffer: RID
 
-# Collision data
+# Collision data (SPARSE BUFFER - only stores loaded chunks)
 var chunk_voxel_data: Dictionary = {}  # Vector3i -> PackedFloat32Array (chunk_pos -> density data)
-var world_size: Vector3i = Vector3i(10, 10, 10)  # Max chunks (expandable)
+var chunk_buffer_offsets: Dictionary = {}  # Vector3i -> int (chunk_pos -> buffer offset in voxels)
 var chunk_size: int = 80
 var voxel_size: float = 1.0
 var needs_buffer_rebuild: bool = false
@@ -75,7 +75,7 @@ func _load_collision_shader() -> bool:
 	return true
 
 func update_voxel_data(chunk_pos: Vector3i, density_data: PackedFloat32Array):
-	"""Update voxel collision data for a chunk"""
+	"""Update voxel collision data for a chunk (SPARSE - only stores this chunk)"""
 	if density_data.size() == 0:
 		print("⚠️ GPUCollisionWorld: Received empty density data for chunk ", chunk_pos)
 		return
@@ -88,32 +88,18 @@ func update_voxel_data(chunk_pos: Vector3i, density_data: PackedFloat32Array):
 	# Store chunk data
 	chunk_voxel_data[chunk_pos] = density_data
 
-	# Expand world bounds if needed
-	_expand_world_bounds(chunk_pos)
-
-	# Mark for buffer rebuild
+	# Mark for buffer rebuild (this will be much faster now)
 	needs_buffer_rebuild = true
 
-	print("🎯 GPUCollisionWorld: Chunk ", chunk_pos, " collision data updated (", chunk_voxel_data.size(), " chunks total)")
+	# Don't print every update - too spammy
+	# print("🎯 GPUCollisionWorld: Chunk ", chunk_pos, " collision data updated (", chunk_voxel_data.size(), " chunks total)")
 
 func remove_chunk_data(chunk_pos: Vector3i):
 	"""Remove voxel collision data for a chunk"""
 	if chunk_voxel_data.has(chunk_pos):
 		chunk_voxel_data.erase(chunk_pos)
+		chunk_buffer_offsets.erase(chunk_pos)
 		needs_buffer_rebuild = true
-		print("🎯 GPUCollisionWorld: Chunk ", chunk_pos, " collision data removed")
-
-func _expand_world_bounds(chunk_pos: Vector3i):
-	"""Expand world size to accommodate new chunks"""
-	var min_size = Vector3i(
-		max(abs(chunk_pos.x) + 1, world_size.x),
-		max(abs(chunk_pos.y) + 1, world_size.y),
-		max(abs(chunk_pos.z) + 1, world_size.z)
-	)
-
-	if min_size != world_size:
-		world_size = min_size
-		print("   🌍 Expanded collision world size to ", world_size)
 
 func _process(_delta):
 	"""Rebuild collision buffer if chunks changed"""
@@ -122,7 +108,7 @@ func _process(_delta):
 		needs_buffer_rebuild = false
 
 func _rebuild_collision_buffer():
-	"""Rebuild entire GPU collision buffer from chunk data"""
+	"""Rebuild GPU collision buffer (SPARSE - only allocates loaded chunks)"""
 	if not rd:
 		return
 
@@ -130,19 +116,31 @@ func _rebuild_collision_buffer():
 	if voxel_collision_buffer.is_valid():
 		rd.free_rid(voxel_collision_buffer)
 
-	# Calculate total size
-	var total_voxels = world_size.x * world_size.y * world_size.z * chunk_size * chunk_size * chunk_size
+	# SPARSE: Only allocate space for loaded chunks
+	var num_chunks = chunk_voxel_data.size()
+	var voxels_per_chunk = chunk_size * chunk_size * chunk_size
+	var total_voxels = num_chunks * voxels_per_chunk
 	var buffer_size = total_voxels * 4  # 4 bytes per float
 
-	# Create new buffer filled with -1.0 (empty)
+	# Create buffer with only loaded chunks (packed sequentially)
 	var buffer_data = PackedFloat32Array()
 	buffer_data.resize(total_voxels)
-	buffer_data.fill(-1.0)  # -1.0 = empty voxel
 
-	# Fill in chunk data
+	# Pack chunks sequentially and track offsets
+	chunk_buffer_offsets.clear()
+	var current_offset = 0
+
 	for chunk_pos in chunk_voxel_data.keys():
 		var density_data = chunk_voxel_data[chunk_pos]
-		_copy_chunk_to_buffer(chunk_pos, density_data, buffer_data)
+
+		# Record this chunk's offset
+		chunk_buffer_offsets[chunk_pos] = current_offset
+
+		# Copy chunk data directly into buffer
+		for i in range(density_data.size()):
+			buffer_data[current_offset + i] = density_data[i]
+
+		current_offset += voxels_per_chunk
 
 	# Upload to GPU
 	var buffer_bytes = buffer_data.to_byte_array()
@@ -152,33 +150,8 @@ func _rebuild_collision_buffer():
 		push_error("Failed to create voxel collision buffer")
 		return
 
-	print("   🎯 Rebuilt collision buffer: ", chunk_voxel_data.size(), " chunks, ", total_voxels, " voxels (", buffer_size / 1024 / 1024, " MB)")
-
-func _copy_chunk_to_buffer(chunk_pos: Vector3i, density_data: PackedFloat32Array, buffer: PackedFloat32Array):
-	"""Copy chunk voxel data into world buffer at correct position"""
-	# Convert chunk position to offset chunk coordinates (handle negative coords)
-	var offset_chunk = chunk_pos + Vector3i(world_size.x / 2, world_size.y / 2, world_size.z / 2)
-
-	# Bounds check
-	if (offset_chunk.x < 0 or offset_chunk.x >= world_size.x or
-	    offset_chunk.y < 0 or offset_chunk.y >= world_size.y or
-	    offset_chunk.z < 0 or offset_chunk.z >= world_size.z):
-		print("⚠️ Chunk ", chunk_pos, " outside collision world bounds")
-		return
-
-	# Calculate chunk offset in buffer
-	var voxels_per_chunk = chunk_size * chunk_size * chunk_size
-	var world_stride_x = voxels_per_chunk
-	var world_stride_y = voxels_per_chunk * world_size.x
-	var world_stride_z = voxels_per_chunk * world_size.x * world_size.y
-
-	var chunk_offset = offset_chunk.x * world_stride_x + offset_chunk.y * world_stride_y + offset_chunk.z * world_stride_z
-
-	# Copy voxel data
-	for i in range(density_data.size()):
-		var buffer_index = chunk_offset + i
-		if buffer_index < buffer.size():
-			buffer[buffer_index] = density_data[i]
+	var mb = buffer_size / 1024.0 / 1024.0
+	print("   ✅ Collision buffer: ", num_chunks, " chunks, ", total_voxels, " voxels (", "%.1f" % mb, " MB)")
 
 func raycast(origin: Vector3, direction: Vector3, max_distance: float = 100.0) -> Dictionary:
 	"""Perform GPU raycast - returns {hit: bool, position: Vector3, normal: Vector3, distance: float}"""
@@ -237,15 +210,30 @@ func _execute_queries(query_data: PackedFloat32Array, query_count: int) -> Array
 	var result_size = query_count * 8 * 4  # 8 floats * 4 bytes
 	var result_buf = rd.storage_buffer_create(result_size)
 
-	# Create params buffer
+	# Create params buffer (SPARSE format: query_count, num_chunks, chunk_size, voxel_size, then chunk metadata)
+	var num_chunks = chunk_voxel_data.size()
 	var params_data = PackedByteArray()
-	params_data.resize(24)  # 6 uints
+	# Header: 4 values (query_count, num_chunks, chunk_size as uint, voxel_size as float)
+	# Chunk data: 4 ints per chunk (x, y, z, buffer_offset)
+	var header_size = 16  # 4 * 4 bytes
+	var chunk_data_size = num_chunks * 4 * 4  # 4 ints * 4 bytes per chunk
+	params_data.resize(header_size + chunk_data_size)
+
+	# Encode header
 	params_data.encode_u32(0, query_count)
-	params_data.encode_u32(4, world_size.x)
-	params_data.encode_u32(8, world_size.y)
-	params_data.encode_u32(12, world_size.z)
-	params_data.encode_u32(16, chunk_size)
-	params_data.encode_float(20, voxel_size)
+	params_data.encode_u32(4, num_chunks)
+	params_data.encode_u32(8, chunk_size)
+	params_data.encode_float(12, voxel_size)
+
+	# Encode chunk metadata (position + buffer offset)
+	var offset = header_size
+	for chunk_pos in chunk_voxel_data.keys():
+		var buffer_offset = chunk_buffer_offsets[chunk_pos]
+		params_data.encode_s32(offset + 0, chunk_pos.x)
+		params_data.encode_s32(offset + 4, chunk_pos.y)
+		params_data.encode_s32(offset + 8, chunk_pos.z)
+		params_data.encode_s32(offset + 12, buffer_offset)
+		offset += 16
 
 	var params_buf = rd.storage_buffer_create(params_data.size(), params_data)
 
