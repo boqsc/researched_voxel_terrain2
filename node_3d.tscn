@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://c7ubxrlyf7kkh"]
+[gd_scene load_steps=9 format=3 uid="uid://covlmr2p1upn0"]
 
 [ext_resource type="Script" uid="uid://bldjphphkquaq" path="res://scripts/VoxelTerrain.gd" id="1_a202f"]
 [ext_resource type="Script" uid="uid://dhxco8hh78kms" path="res://character_body_3d.gd" id="1_noarx"]
@@ -36,7 +36,7 @@ transform = Transform3D(-0.8660253, -0.4330129, 0.25000006, -2.7805912e-08, 0.49
 shadow_enabled = true
 
 [node name="CharacterBody3D" type="CharacterBody3D" parent="Node3D" groups=["collision_entities"]]
-transform = Transform3D(1, 0, 0, -4.4409e-16, 1, 0, 0, 0, 1, 47.651905, 138.768, 93.42319)
+transform = Transform3D(1, 0, 0, -4.4409e-16, 1, 0, 0, 0, 1, 47.6519, 71.346275, 47.866203)
 collision_layer = 2
 script = ExtResource("1_noarx")
 
@@ -52,8 +52,8 @@ mesh = SubResource("CapsuleMesh_noarx")
 
 [node name="VoxelTerrain" type="Node3D" parent="." groups=["voxel_terrain"]]
 script = ExtResource("1_a202f")
-chunk_size = 220
-visibility_ratio = 0.01
+chunk_load_radius = 10
+chunk_size = 72
 
 [node name="CSGBox3D" type="CSGBox3D" parent="."]
 transform = Transform3D(34.875, 0, 0, 0, 34.875, 0, 0, 0, 34.875, 119.99788, 212.77443, 92.88375)
@@ -61,4 +61,5 @@ material = SubResource("StandardMaterial3D_noarx")
 
 [node name="CSGBox3D2" type="CSGBox3D" parent="."]
 transform = Transform3D(9000, 0, 0, 0, 5, 0, 0, 0, 90000, 119.99788, -128.10957, 92.88375)
+visible = false
 material = SubResource("StandardMaterial3D_noarx")
