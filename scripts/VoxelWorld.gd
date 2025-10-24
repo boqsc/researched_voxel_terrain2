@@ -12,10 +12,10 @@ var mesher_shader: RID
 
 # Chunk management
 var chunks: Dictionary = {}  # Vector3i -> ChunkData
-var generation_queue: Array = []  # Array of Vector3i positions to generate
-@export_range(1, 100, 1) var chunk_generation_cpu_percent: int = 10  # % of frames to dedicate to chunk generation
+var generation_queue: Array = []  # Array of Vector3i positions to generate (GPU work)
+var decode_queue: Array = []  # Array of {chunk_pos, mesh_data} waiting to be decoded
+@export_range(1, 100, 1) var chunk_generation_cpu_percent: int = 10  # % of frame time budget for decoding (10% = 1.6ms/frame)
 @export var generate_collision: bool = false  # Generate collision during chunk loading (slower but safer)
-var _frame_counter: int = 0  # Used to throttle chunk generation based on CPU percentage
 
 # Chunk parameters (shared by all chunks)
 @export_range(8, 256, 8) var chunk_size: int = 80
@@ -52,28 +52,20 @@ func _ready():
 	print("🎉 VoxelWorld ready - all chunks will share ONE RenderingDevice")
 
 func _process(_delta):
-	# Throttle chunk generation based on CPU percentage
-	# 100% = generate every frame (laggy but fast terrain gen)
-	# 10% = generate every 10th frame (smooth but slower terrain gen)
-	_frame_counter += 1
+	# For now: Keep it simple - generate one chunk per frame if queue not empty
+	# TODO: Implement proper time budget system for 60 FPS during generation
+	# This requires splitting the 600ms decode across many frames
 
 	if generation_queue.size() == 0:
-		return  # Nothing to generate
+		return
 
-	# Calculate if we should generate this frame based on percentage
-	# Example: 10% means generate on frames 0, 10, 20, 30... (every 10th frame)
-	var frames_between_generation = max(1, int(100.0 / chunk_generation_cpu_percent))
-
-	if (_frame_counter % frames_between_generation) != 0:
-		return  # Skip this frame, wait for next generation window
-
-	# Generate one chunk this frame
+	# Generate one chunk (GPU + full decode)
 	var chunk_pos = generation_queue.pop_front()
 	_generate_chunk_async(chunk_pos)
 
-	if generation_queue.size() > 0 and (_frame_counter % (frames_between_generation * 10)) == 0:
-		# Print status every 10 generations to avoid spam
-		print("📊 Generation progress: ", generation_queue.size(), " chunks remaining (CPU: ", chunk_generation_cpu_percent, "%)")
+	# Status update
+	if generation_queue.size() > 0 and generation_queue.size() % 10 == 0:
+		print("📊 ", generation_queue.size(), " chunks remaining")
 
 func load_shaders() -> bool:
 	# Load voxel generator shader
