@@ -32,7 +32,7 @@ func _ready():
 	add_child(mesh_instance)
 	name = "ChunkGPU_%d_%d_%d" % [chunk_position.x, chunk_position.y, chunk_position.z]
 
-func apply_gpu_mesh_data(mesh_data: Dictionary, shared_rd: RenderingDevice, _shader_pipeline: RID):
+func apply_gpu_mesh_data(mesh_data: Dictionary, shared_rd: RenderingDevice, _shader_pipeline = null):
 	"""Apply GPU mesh data - FAST PATH (no incremental decode!)"""
 	if mesh_data.vertex_count == 0:
 		push_error("Chunk ", chunk_position, " received empty mesh data")

@@ -270,7 +270,7 @@ func _on_chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary, enable_collisio
 	# Apply mesh data
 	if mesh_data.get("gpu_only", false):
 		# GPU-only mode: Pass GPU buffer handles directly
-		chunk.apply_gpu_mesh_data(mesh_data, VoxelWorld.rd, null)  # TODO: Pass render pipeline
+		chunk.apply_gpu_mesh_data(mesh_data, VoxelWorld.rd)
 	else:
 		# Traditional mode: CPU decode path
 		chunk.apply_mesh_data(mesh_data, enable_collision)
