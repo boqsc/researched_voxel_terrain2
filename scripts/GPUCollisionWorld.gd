@@ -160,9 +160,9 @@ func _copy_chunk_to_buffer(chunk_pos: Vector3i, density_data: PackedFloat32Array
 	var offset_chunk = chunk_pos + Vector3i(world_size.x / 2, world_size.y / 2, world_size.z / 2)
 
 	# Bounds check
-	if offset_chunk.x < 0 or offset_chunk.x >= world_size.x or
-	   offset_chunk.y < 0 or offset_chunk.y >= world_size.y or
-	   offset_chunk.z < 0 or offset_chunk.z >= world_size.z:
+	if (offset_chunk.x < 0 or offset_chunk.x >= world_size.x or
+	    offset_chunk.y < 0 or offset_chunk.y >= world_size.y or
+	    offset_chunk.z < 0 or offset_chunk.z >= world_size.z):
 		print("⚠️ Chunk ", chunk_pos, " outside collision world bounds")
 		return
 

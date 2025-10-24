@@ -90,7 +90,7 @@ func _gpu_move_and_slide(delta: float):
 	if delta > 0:
 		velocity = motion / delta
 
-func is_on_floor() -> bool:
+func _is_on_floor_gpu() -> bool:
 	"""GPU-based floor detection"""
 	if use_gpu_collision and gpu_collision:
 		return gpu_collision.overlap_sphere(
@@ -99,9 +99,9 @@ func is_on_floor() -> bool:
 		)
 	else:
 		# Fall back to standard method
-		return super.is_on_floor()
+		return is_on_floor()
 
-func get_floor_normal() -> Vector3:
+func _get_floor_normal_gpu() -> Vector3:
 	"""Get floor normal using GPU raycast"""
 	if use_gpu_collision and gpu_collision:
 		var result = gpu_collision.raycast(
