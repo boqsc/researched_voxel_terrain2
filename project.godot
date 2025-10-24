@@ -11,13 +11,14 @@ config_version=5
 [application]
 
 config/name="researched_voxel_terrain2"
-run/main_scene="uid://covlmr2p1upn0"
+run/main_scene="res://scenes/GPUCollisionTest.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
 VoxelWorld="*res://scripts/VoxelWorld.gd"
+GPUCollisionWorld="*res://scripts/GPUCollisionWorld.gd"
 
 [input]
 
