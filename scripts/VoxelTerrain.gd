@@ -8,41 +8,53 @@ extends Node3D
 @export_range(1, 10, 1) var chunk_load_radius: int = 3  # Load chunks within N chunks of player
 @export var auto_load_chunks: bool = true  # Automatically load chunks around player
 
+# Editor preview settings
+@export_range(1, 5, 1) var editor_preview_chunks: int = 1:  # How many chunks to show in editor (NxN grid)
+	set(value):
+		editor_preview_chunks = value
+		_on_editor_param_changed()
+
 # Terrain generation parameters (updates VoxelWorld singleton)
 @export_range(8, 256, 8) var chunk_size: int = 80:
 	set(value):
 		chunk_size = value
 		if VoxelWorld:
 			VoxelWorld.chunk_size = value
+		_on_editor_param_changed()
 
 @export_range(0.1, 10.0, 0.1) var voxel_size: float = 1.0:
 	set(value):
 		voxel_size = value
 		if VoxelWorld:
 			VoxelWorld.voxel_size = value
+		_on_editor_param_changed()
 
 @export_range(0.001, 1.0, 0.001) var noise_scale: float = 0.1:
 	set(value):
 		noise_scale = value
 		if VoxelWorld:
 			VoxelWorld.noise_scale = value
+		_on_editor_param_changed()
 
 @export_range(-20.0, 20.0, 0.1) var height_scale: float = 8.0:
 	set(value):
 		height_scale = value
 		if VoxelWorld:
 			VoxelWorld.height_scale = value
+		_on_editor_param_changed()
 
 @export_range(0.005, 0.1, 0.005) var visibility_ratio: float = 0.01:
 	set(value):
 		visibility_ratio = value
 		if VoxelWorld:
 			VoxelWorld.visibility_ratio = value
+		_on_editor_param_changed()
 
 var player: Node3D
 var active_chunks: Dictionary = {}  # Vector3i -> VoxelChunk instance
 var last_player_chunk: Vector3i = Vector3i(999999, 999999, 999999)  # Force initial load
 var initial_chunks_requested: bool = false
+var _update_timer: SceneTreeTimer  # For debouncing editor updates
 
 func _ready():
 	# Apply parameters to VoxelWorld
@@ -53,10 +65,17 @@ func _ready():
 		VoxelWorld.height_scale = height_scale
 		VoxelWorld.visibility_ratio = visibility_ratio
 
+	# Connect to VoxelWorld chunk_ready signal
+	if VoxelWorld:
+		VoxelWorld.chunk_ready.connect(_on_chunk_ready)
+		print("✅ Connected to VoxelWorld.chunk_ready signal")
+	else:
+		push_error("VoxelWorld singleton not found! Is it registered as autoload?")
+
 	if Engine.is_editor_hint():
 		print("🧰 VoxelTerrain running in editor mode")
-		# In editor, generate a single chunk at origin for preview
-		_request_single_chunk(Vector3i.ZERO)
+		# In editor, generate chunks for preview
+		_generate_editor_preview()
 	else:
 		print("▶️ VoxelTerrain running in game mode")
 		# In game mode, generate initial chunks immediately at origin
@@ -64,12 +83,52 @@ func _ready():
 		print("🌍 Generating initial chunks at origin...")
 		_generate_initial_chunks()
 
-	# Connect to VoxelWorld chunk_ready signal
-	if VoxelWorld:
-		VoxelWorld.chunk_ready.connect(_on_chunk_ready)
-		print("✅ Connected to VoxelWorld.chunk_ready signal")
-	else:
-		push_error("VoxelWorld singleton not found! Is it registered as autoload?")
+func _on_editor_param_changed():
+	"""Called when parameters change in editor - regenerate terrain"""
+	if not Engine.is_editor_hint():
+		return
+
+	if not is_inside_tree():
+		# During initial loading, ignore updates
+		return
+
+	# Debounce rapid editor updates (e.g. dragging sliders)
+	if _update_timer and _update_timer.timeout.is_connected(_do_editor_update):
+		_update_timer.timeout.disconnect(_do_editor_update)
+	_update_timer = get_tree().create_timer(0.3, false)  # 300ms debounce
+	_update_timer.timeout.connect(_do_editor_update)
+
+func _do_editor_update():
+	"""Regenerate terrain after debounce delay"""
+	if not Engine.is_editor_hint():
+		return
+	if not is_inside_tree():
+		return
+
+	print("🔄 Editor parameter changed — regenerating terrain...")
+
+	# Clear all existing chunks
+	for chunk_pos in active_chunks.keys():
+		var chunk = active_chunks[chunk_pos]
+		chunk.cleanup()
+	active_chunks.clear()
+
+	# Regenerate preview
+	_generate_editor_preview()
+
+func _generate_editor_preview():
+	"""Generate chunks for editor preview based on editor_preview_chunks setting"""
+	var half_size = int(editor_preview_chunks / 2)
+	var chunk_count = 0
+
+	print("   📋 Generating ", editor_preview_chunks, "x", editor_preview_chunks, " chunk grid for editor preview")
+
+	for x in range(-half_size, half_size + (editor_preview_chunks % 2)):
+		for z in range(-half_size, half_size + (editor_preview_chunks % 2)):
+			VoxelWorld.request_chunk(Vector3i(x, 0, z))
+			chunk_count += 1
+
+	print("   📋 Requested ", chunk_count, " chunks for editor preview")
 
 func _generate_initial_chunks():
 	"""Generate initial chunks around origin so player has ground to spawn on"""
@@ -149,11 +208,6 @@ func _chunk_distance(a: Vector3i, b: Vector3i) -> float:
 	"""Calculate distance between two chunk positions"""
 	var diff = a - b
 	return sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z)
-
-func _request_single_chunk(chunk_pos: Vector3i):
-	"""Request a single chunk (used in editor mode)"""
-	if VoxelWorld:
-		VoxelWorld.request_chunk(chunk_pos)
 
 func _on_chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary):
 	"""Called when VoxelWorld has generated a chunk"""
