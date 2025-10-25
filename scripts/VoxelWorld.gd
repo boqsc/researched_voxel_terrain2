@@ -17,6 +17,7 @@ var collision_queue: Array = []  # Array of {chunk_pos, mesh_data} for deferred 
 
 # Chunk decoding settings (CPU work for vertex unpacking)
 var use_smooth_chunk_loading: bool = true  # Spread vertex decoding over frames (smooth) or instant (stutter)
+var instant_load_ground: bool = true  # Force instant loading for chunks at/below player Y (prevents falling)
 @export_range(1, 100, 1) var chunk_decode_time_budget_percent: int = 10:  # % of frame time budget for decoding (10% ≈ 1.6ms at 60fps)
 	set(value):
 		chunk_decode_time_budget_percent = value
@@ -197,13 +198,24 @@ func _generate_chunk_async(chunk_pos: Vector3i):
 		"decode_complete": false
 	}
 
-	# Choose decode path based on use_smooth_chunk_loading
-	if use_smooth_chunk_loading:
-		# Time-budgeted decode (smooth, 2-5 seconds)
-		chunk_decoder.add_decode_job(chunk_pos, mesh_data, generate_collision)
-	else:
+	# Choose decode path based on settings
+	var should_instant_load = false
+
+	# Force instant loading for ground chunks if enabled
+	if instant_load_ground and chunk_pos.y <= player_chunk_position.y:
+		should_instant_load = true
+		print("   ⚡ Forcing instant load for ground chunk ", chunk_pos, " (Y=", chunk_pos.y, " <= player Y=", player_chunk_position.y, ")")
+
+	# Or use global instant loading setting
+	if not use_smooth_chunk_loading:
+		should_instant_load = true
+
+	if should_instant_load:
 		# Instant decode (fast, but causes stutter)
 		_decode_chunk_instant(chunk_pos, mesh_data, generate_collision)
+	else:
+		# Time-budgeted decode (smooth, 2-5 seconds)
+		chunk_decoder.add_decode_job(chunk_pos, mesh_data, generate_collision)
 
 func _generate_voxel_data(chunk_pos: Vector3i) -> RID:
 	"""Generate voxel data for a chunk using GPU compute shader"""

@@ -18,6 +18,12 @@ extends Node3D
 		if VoxelWorld:
 			VoxelWorld.use_smooth_chunk_loading = value
 
+@export var instant_load_ground: bool = true:  # Force instant loading (no smooth decode) for chunks at/below player Y to prevent falling
+	set(value):
+		instant_load_ground = value
+		if VoxelWorld:
+			VoxelWorld.instant_load_ground = value
+
 @export_range(1, 100, 1) var chunk_decode_time_budget_percent: int = 10:  # % of frame time for vertex decoding (10% ≈ 1.6ms at 60fps)
 	set(value):
 		chunk_decode_time_budget_percent = value
@@ -93,6 +99,7 @@ func _ready():
 		VoxelWorld.height_scale = height_scale
 		VoxelWorld.visibility_ratio = visibility_ratio
 		VoxelWorld.use_smooth_chunk_loading = use_smooth_chunk_loading
+		VoxelWorld.instant_load_ground = instant_load_ground
 		VoxelWorld.chunk_decode_time_budget_percent = chunk_decode_time_budget_percent
 		VoxelWorld.generate_collision = generate_collision
 		VoxelWorld.collision_radius = collision_radius
