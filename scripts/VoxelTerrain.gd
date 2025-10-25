@@ -9,6 +9,7 @@ extends Node3D
 @export var auto_load_chunks: bool = true  # Automatically load chunks around player
 @export_range(1, 5, 1) var vertical_chunk_layers: int = 3  # Maximum chunk Y to load (loads from Y=-1 to Y=this value, ABSOLUTE not relative to player)
 @export_range(0, 10, 1) var chunk_unload_hysteresis: int = 1  # Extra chunks beyond load_radius before unloading (prevents thrashing)
+@export var use_priority_loading: bool = true  # Prioritize chunks by: 1) below player (ground first), 2) distance, 3) view direction
 
 # Chunk decoding settings (controls CPU work for vertex unpacking)
 @export var use_smooth_chunk_loading: bool = true:  # Spread vertex decoding over frames (true=smooth) or load instantly (false=stutter)
@@ -263,6 +264,11 @@ func update_chunks_around_player(center: Vector3i):
 
 	if chunks_to_load.size() > 0:
 		print("📋 Loading ", chunks_to_load.size(), " chunks around player at ", center)
+
+		# Sort chunks by priority if enabled
+		if use_priority_loading:
+			chunks_to_load = _sort_chunks_by_priority(chunks_to_load, center)
+
 		for chunk_pos in chunks_to_load:
 			VoxelWorld.request_chunk(chunk_pos)
 
@@ -288,6 +294,69 @@ func _chunk_distance_horizontal(a: Vector3i, b: Vector3i) -> float:
 	var diff_x = a.x - b.x
 	var diff_z = a.z - b.z
 	return sqrt(diff_x * diff_x + diff_z * diff_z)
+
+func _sort_chunks_by_priority(chunks: Array, player_chunk_pos: Vector3i) -> Array:
+	"""Sort chunks by loading priority: 1) below player, 2) close distance, 3) view direction"""
+
+	# Get player camera direction if available
+	var camera_forward = Vector3.FORWARD
+	if player:
+		var camera = player.get_node_or_null("Camera3D")
+		if camera:
+			camera_forward = -camera.global_transform.basis.z  # Camera forward direction
+
+	# Calculate priority for each chunk
+	var chunk_priorities = []
+	for chunk_pos in chunks:
+		var priority = _calculate_chunk_priority(chunk_pos, player_chunk_pos, camera_forward)
+		chunk_priorities.append({"chunk_pos": chunk_pos, "priority": priority})
+
+	# Sort by priority (higher = better = loads first)
+	chunk_priorities.sort_custom(func(a, b): return a.priority > b.priority)
+
+	# Extract sorted chunk positions
+	var sorted_chunks = []
+	for item in chunk_priorities:
+		sorted_chunks.append(item.chunk_pos)
+
+	return sorted_chunks
+
+func _calculate_chunk_priority(chunk_pos: Vector3i, player_chunk_pos: Vector3i, camera_forward: Vector3) -> float:
+	"""Calculate loading priority for a chunk (higher = loads sooner)"""
+	var priority = 0.0
+
+	# PRIORITY 1: Below player gets MASSIVE boost (need ground first!)
+	# If chunk is at or below player's Y position, boost priority
+	if chunk_pos.y <= player_chunk_pos.y:
+		priority += 1000.0  # Ground chunks load first!
+		# Extra boost for chunks directly below player
+		if chunk_pos.y < player_chunk_pos.y:
+			priority += (player_chunk_pos.y - chunk_pos.y) * 100.0
+
+	# PRIORITY 2: Distance (closer = better)
+	var distance = _chunk_distance(chunk_pos, player_chunk_pos)
+	priority += 100.0 / (distance + 0.1)  # Avoid divide by zero
+
+	# PRIORITY 3: View direction (chunks player is looking at)
+	# Calculate direction from player to chunk
+	var chunk_world_pos = Vector3(
+		chunk_pos.x * VoxelWorld.chunk_size * VoxelWorld.voxel_size,
+		chunk_pos.y * VoxelWorld.chunk_size * VoxelWorld.voxel_size,
+		chunk_pos.z * VoxelWorld.chunk_size * VoxelWorld.voxel_size
+	)
+	var player_world_pos = Vector3(
+		player_chunk_pos.x * VoxelWorld.chunk_size * VoxelWorld.voxel_size,
+		player_chunk_pos.y * VoxelWorld.chunk_size * VoxelWorld.voxel_size,
+		player_chunk_pos.z * VoxelWorld.chunk_size * VoxelWorld.voxel_size
+	)
+	var to_chunk = (chunk_world_pos - player_world_pos).normalized()
+
+	# Dot product: 1.0 = directly ahead, -1.0 = directly behind
+	var view_alignment = to_chunk.dot(camera_forward)
+	if view_alignment > 0:  # In front of player
+		priority += view_alignment * 50.0  # Chunks in view get boost
+
+	return priority
 
 func _on_chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary, enable_collision: bool):
 	"""Called when VoxelWorld has generated a chunk"""
