@@ -5,9 +5,9 @@ extends Node3D
 # Does NOT do GPU work - that's handled by VoxelWorld singleton
 
 # Chunk loading settings
-@export_range(1, 50, 1) var chunk_load_radius: int = 3  # Load chunks within N chunks of player
+@export_range(1, 50, 1) var chunk_load_radius: int = 3  # Load chunks within N chunks of player (horizontal XZ only)
 @export var auto_load_chunks: bool = true  # Automatically load chunks around player
-@export_range(1, 5, 1) var vertical_chunk_layers: int = 3  # Number of vertical chunk layers to load (centered on player)
+@export_range(1, 5, 1) var vertical_chunk_layers: int = 3  # Maximum chunk Y to load (loads from Y=-1 to Y=this value, ABSOLUTE not relative to player)
 @export_range(0, 10, 1) var chunk_unload_hysteresis: int = 1  # Extra chunks beyond load_radius before unloading (prevents thrashing)
 
 # Chunk decoding settings (controls CPU work for vertex unpacking)
@@ -244,14 +244,16 @@ func update_chunks_around_player(center: Vector3i):
 	"""Load chunks in radius around player, unload distant chunks"""
 	# Load chunks in radius
 	var chunks_to_load = []
-	var y_half = floori(vertical_chunk_layers / 2.0)
-	var y_range_start = -y_half
-	var y_range_end = y_half + (vertical_chunk_layers % 2)  # Add 1 if odd number
+
+	# Use ABSOLUTE vertical range instead of relative to player
+	# This prevents terrain from regenerating when player changes height
+	var y_start = -1  # Load from chunk Y = -1 (below ground)
+	var y_end = vertical_chunk_layers  # Up to configured layers (default = 3)
 
 	for x in range(-chunk_load_radius, chunk_load_radius + 1):
 		for z in range(-chunk_load_radius, chunk_load_radius + 1):
-			for y in range(y_range_start, y_range_end):  # Use configurable vertical layers
-				var chunk_pos = center + Vector3i(x, y, z)
+			for y in range(y_start, y_end):  # FIXED vertical range, not relative to player
+				var chunk_pos = Vector3i(center.x + x, y, center.z + z)  # Only use center for XZ
 
 				# Skip if already active
 				if active_chunks.has(chunk_pos):
@@ -264,11 +266,11 @@ func update_chunks_around_player(center: Vector3i):
 		for chunk_pos in chunks_to_load:
 			VoxelWorld.request_chunk(chunk_pos)
 
-	# Unload distant chunks
+	# Unload distant chunks (horizontal distance only)
 	var chunks_to_unload = []
 	for chunk_pos in active_chunks.keys():
-		var distance = _chunk_distance(chunk_pos, center)
-		if distance > chunk_load_radius + chunk_unload_hysteresis:  # Use configurable hysteresis
+		var horizontal_dist = _chunk_distance_horizontal(chunk_pos, center)
+		if horizontal_dist > chunk_load_radius + chunk_unload_hysteresis:  # Use configurable hysteresis
 			chunks_to_unload.append(chunk_pos)
 
 	if chunks_to_unload.size() > 0:
@@ -277,9 +279,15 @@ func update_chunks_around_player(center: Vector3i):
 			_unload_chunk(chunk_pos)
 
 func _chunk_distance(a: Vector3i, b: Vector3i) -> float:
-	"""Calculate distance between two chunk positions"""
+	"""Calculate distance between two chunk positions (3D)"""
 	var diff = a - b
 	return sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z)
+
+func _chunk_distance_horizontal(a: Vector3i, b: Vector3i) -> float:
+	"""Calculate horizontal (XZ) distance between two chunk positions"""
+	var diff_x = a.x - b.x
+	var diff_z = a.z - b.z
+	return sqrt(diff_x * diff_x + diff_z * diff_z)
 
 func _on_chunk_ready(chunk_pos: Vector3i, mesh_data: Dictionary, enable_collision: bool):
 	"""Called when VoxelWorld has generated a chunk"""
