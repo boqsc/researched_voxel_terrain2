@@ -17,7 +17,11 @@ var collision_queue: Array = []  # Array of {chunk_pos, mesh_data} for deferred 
 
 # Chunk decoding settings (CPU work for vertex unpacking)
 var use_smooth_chunk_loading: bool = true  # Spread vertex decoding over frames (smooth) or instant (stutter)
-@export_range(1, 100, 1) var chunk_decode_time_budget_percent: int = 10  # % of frame time budget for decoding (10% ≈ 1.6ms at 60fps)
+@export_range(1, 100, 1) var chunk_decode_time_budget_percent: int = 10:  # % of frame time budget for decoding (10% ≈ 1.6ms at 60fps)
+	set(value):
+		chunk_decode_time_budget_percent = value
+		if chunk_decoder:
+			chunk_decoder.time_budget_percent = value
 @export var generate_collision: bool = false  # Generate collision mesh (WARNING: ~200ms per chunk, causes stutters)
 @export_range(0, 10, 1) var collision_radius: int = 1  # Collision generation (0=disabled, 1+=enabled for player's current chunk only)
 
@@ -193,8 +197,13 @@ func _generate_chunk_async(chunk_pos: Vector3i):
 		"decode_complete": false
 	}
 
-	# Pass to ChunkDecoder for incremental decode (slow CPU work)
-	chunk_decoder.add_decode_job(chunk_pos, mesh_data, generate_collision)
+	# Choose decode path based on use_smooth_chunk_loading
+	if use_smooth_chunk_loading:
+		# Time-budgeted decode (smooth, 2-5 seconds)
+		chunk_decoder.add_decode_job(chunk_pos, mesh_data, generate_collision)
+	else:
+		# Instant decode (fast, but causes stutter)
+		_decode_chunk_instant(chunk_pos, mesh_data, generate_collision)
 
 func _generate_voxel_data(chunk_pos: Vector3i) -> RID:
 	"""Generate voxel data for a chunk using GPU compute shader"""
@@ -441,6 +450,72 @@ func _exit_tree():
 		rd.free()
 		rd = null
 	print("🌍 VoxelWorld singleton cleaned up")
+
+func _decode_chunk_instant(chunk_pos: Vector3i, mesh_data: Dictionary, enable_collision: bool):
+	"""Decode chunk instantly without time budget (causes stutter but fast)"""
+	var decode_start = Time.get_ticks_msec()
+
+	# Constants (must match ChunkDecoder)
+	const BYTES_PER_FLOAT = 4
+	const FLOATS_PER_VERTEX = 8  # position(3) + normal(3) + uv(2)
+
+	var vertex_count = mesh_data.vertex_count
+	var index_count = mesh_data.index_count
+	var bytes_per_vertex = FLOATS_PER_VERTEX * BYTES_PER_FLOAT
+
+	# Pre-allocate output arrays
+	var vertices = PackedVector3Array()
+	var normals = PackedVector3Array()
+	var uvs = PackedVector2Array()
+	var indices = PackedInt32Array()
+
+	vertices.resize(vertex_count)
+	normals.resize(vertex_count)
+	uvs.resize(vertex_count)
+	indices.resize(index_count)
+
+	# Decode all vertices (no time budget)
+	for i in range(vertex_count):
+		var offset = i * bytes_per_vertex
+
+		# Decode position
+		var x = mesh_data.vertex_data.decode_float(offset)
+		var y = mesh_data.vertex_data.decode_float(offset + BYTES_PER_FLOAT)
+		var z = mesh_data.vertex_data.decode_float(offset + 2 * BYTES_PER_FLOAT)
+		vertices[i] = Vector3(x, y, z)
+
+		# Decode normal
+		var nx = mesh_data.vertex_data.decode_float(offset + 3 * BYTES_PER_FLOAT)
+		var ny = mesh_data.vertex_data.decode_float(offset + 4 * BYTES_PER_FLOAT)
+		var nz = mesh_data.vertex_data.decode_float(offset + 5 * BYTES_PER_FLOAT)
+		normals[i] = Vector3(nx, ny, nz)
+
+		# Decode UV
+		var ux = mesh_data.vertex_data.decode_float(offset + 6 * BYTES_PER_FLOAT)
+		var uy = mesh_data.vertex_data.decode_float(offset + 7 * BYTES_PER_FLOAT)
+		uvs[i] = Vector2(ux, uy)
+
+	# Decode all indices
+	for i in range(index_count):
+		indices[i] = mesh_data.index_data.decode_u32(i * 4)
+
+	var decode_time = Time.get_ticks_msec() - decode_start
+	print("⚡ Chunk ", chunk_pos, " decoded INSTANTLY in ", decode_time, "ms (", vertex_count, " vertices) - STUTTER!")
+
+	# Package decoded data
+	var decoded_data = {
+		"vertices": vertices,
+		"normals": normals,
+		"uvs": uvs,
+		"indices": indices,
+		"vertex_count": vertex_count,
+		"index_count": index_count,
+		"enable_collision": enable_collision
+	}
+
+	# Call the same handler as ChunkDecoder would
+	_on_chunk_decoded(chunk_pos, decoded_data)
+
 func _on_chunk_decoded(chunk_pos: Vector3i, decoded_data: Dictionary):
 	"""Called by ChunkDecoder when chunk decode is complete"""
 	print("📦 Chunk ", chunk_pos, " decode complete, spawning...")
