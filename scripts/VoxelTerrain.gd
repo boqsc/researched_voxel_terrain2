@@ -18,12 +18,6 @@ extends Node3D
 		if VoxelWorld:
 			VoxelWorld.use_smooth_chunk_loading = value
 
-@export var instant_load_ground: bool = true:  # Force instant loading (no smooth decode) for chunks at/below player Y to prevent falling
-	set(value):
-		instant_load_ground = value
-		if VoxelWorld:
-			VoxelWorld.instant_load_ground = value
-
 @export_range(1, 100, 1) var chunk_decode_time_budget_percent: int = 10:  # % of frame time for vertex decoding (10% ≈ 1.6ms at 60fps)
 	set(value):
 		chunk_decode_time_budget_percent = value
@@ -99,7 +93,6 @@ func _ready():
 		VoxelWorld.height_scale = height_scale
 		VoxelWorld.visibility_ratio = visibility_ratio
 		VoxelWorld.use_smooth_chunk_loading = use_smooth_chunk_loading
-		VoxelWorld.instant_load_ground = instant_load_ground
 		VoxelWorld.chunk_decode_time_budget_percent = chunk_decode_time_budget_percent
 		VoxelWorld.generate_collision = generate_collision
 		VoxelWorld.collision_radius = collision_radius
@@ -118,10 +111,8 @@ func _ready():
 		_generate_editor_preview()
 	else:
 		print("▶️ VoxelTerrain running in game mode")
-		# In game mode, generate initial chunks immediately at origin
-		# This ensures player has ground to land on
-		print("🌍 Generating initial chunks at origin...")
-		_generate_initial_chunks()
+		# In game mode, wait for player position before generating chunks
+		# Initial chunks will be generated in _process() when player is found
 
 func _on_editor_param_changed():
 	"""Called when parameters change in editor - regenerate terrain"""
@@ -204,6 +195,11 @@ func _process(_delta):
 			VoxelWorld.player_chunk_position = initial_chunk_pos
 			print("   📍 Initial player chunk position: ", initial_chunk_pos)
 
+			# DISABLE smooth loading for initial chunks (prevent falling)
+			print("   ⚡ DISABLING smooth loading for initial chunk load")
+			VoxelWorld.use_smooth_chunk_loading = false
+			initial_chunks_requested = false  # Mark that we need to generate initial chunks
+
 	# Get player's current chunk position
 	var player_chunk_pos = world_to_chunk(player.global_position)
 
@@ -218,10 +214,23 @@ func _process(_delta):
 		if VoxelWorld:
 			VoxelWorld.player_chunk_position = player_chunk_pos
 
+		# Check if this is initial load or exploration
+		if not initial_chunks_requested:
+			# INITIAL LOAD: Load all chunks instantly
+			print("   ⚡ INITIAL LOAD: All chunks will load INSTANTLY")
+			update_chunks_around_player(player_chunk_pos)
+			initial_chunks_requested = true
+
+			# Re-enable smooth loading for future exploration (if it was enabled in settings)
+			if use_smooth_chunk_loading and VoxelWorld:
+				print("   ✅ Re-enabling smooth loading for exploration")
+				VoxelWorld.use_smooth_chunk_loading = true
+		else:
+			# EXPLORATION: Use smooth loading for new chunks
+			update_chunks_around_player(player_chunk_pos)
+
 		# Update collision for chunks based on new player position
 		_update_collision_for_nearby_chunks(player_chunk_pos)
-
-		update_chunks_around_player(player_chunk_pos)
 
 func _update_collision_for_nearby_chunks(player_chunk_pos: Vector3i):
 	"""Check if player's current chunk needs collision added"""
